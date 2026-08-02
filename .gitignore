@@ -11,6 +11,8 @@ obj/
 # Databases (local dev artifacts, never commit real data)
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
 # Logs
 *.log
