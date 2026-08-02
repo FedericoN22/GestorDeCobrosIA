@@ -16,7 +16,8 @@ obj/
 
 # Logs
 *.log
+nul
 
-# OS
-.DS_Store
-Thumbs.db
+# Scratch / experimentos temporales
+.scratch-repro/
+login.json

@@ -1,0 +1,40 @@
+﻿@inherits LayoutComponentBase
+@inject AuthState Auth
+@inject NavigationManager Nav
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4 d-flex justify-content-between align-items-center">
+            <span class="text-muted">Panel de gestión</span>
+            @if (Auth.IsAuthenticated)
+            {
+                <div class="d-flex align-items-center gap-2">
+                    <span>@Auth.Usuario!.Nombre</span>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="CerrarSesion">Cerrar sesión</button>
+                </div>
+            }
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Un error no controlado ocurrió.
+    <a href="." class="reload">Recargar</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private void CerrarSesion()
+    {
+        Auth.Limpiar();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+}

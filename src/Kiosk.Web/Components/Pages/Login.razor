@@ -1,0 +1,68 @@
+@page "/login"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h3 class="card-title mb-3">Iniciar sesión</h3>
+
+                @if (_error is not null)
+                {
+                    <div class="alert alert-danger py-2">@_error</div>
+                }
+
+                <form @onsubmit="LoginAsync" @onsubmit:preventDefault="true">
+                    <div class="mb-3">
+                        <label class="form-label">Usuario</label>
+                        <input class="form-control" @bind="_usuario" autocomplete="username" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña</label>
+                        <input class="form-control" type="password" @bind="_clave" autocomplete="current-password" required />
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100" disabled="@_cargando">
+                        @(_cargando ? "Ingresando…" : "Ingresar")
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _usuario = "";
+    private string _clave = "";
+    private bool _cargando;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("/");
+        }
+    }
+
+    private async Task LoginAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            var resultado = await Api.LoginAsync(_usuario.Trim(), _clave, CancellationToken.None);
+            Auth.Establecer(resultado.Token, resultado.Usuario);
+            Nav.NavigateTo("/");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+}

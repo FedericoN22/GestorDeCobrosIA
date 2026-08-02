@@ -1,6 +1,7 @@
 using Kiosk.Api.Auth;
 using Kiosk.Application.Abstractions;
 using Kiosk.Application.CasosUso.Autenticacion;
+using Kiosk.Domain.Usuarios;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -35,12 +36,13 @@ public sealed class AuthController : ControllerBase
         return Ok(new LoginResponse(
             token,
             DateTime.UtcNow.AddMinutes(_tokenService.ExpiraEnMinutos),
-            new UsuarioResponse(usuario.UsuarioId, usuario.Username, usuario.Nombre, usuario.Rol.ToString(), usuario.ComercioId)));
+            new UsuarioResponse(usuario.UsuarioId, usuario.Username, usuario.Nombre, usuario.Rol.ToString(), usuario.ComercioId,
+                Permisos.Para(usuario.Rol).ToArray())));
     }
 }
 
 public sealed record LoginRequest(string Username, string Password);
 
-public sealed record UsuarioResponse(Guid Id, string Username, string Nombre, string Rol, Guid ComercioId);
+public sealed record UsuarioResponse(Guid Id, string Username, string Nombre, string Rol, Guid ComercioId, IReadOnlyCollection<string> Permisos);
 
 public sealed record LoginResponse(string Token, DateTime ExpiraEn, UsuarioResponse Usuario);

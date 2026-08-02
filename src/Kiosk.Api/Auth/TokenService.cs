@@ -33,6 +33,11 @@ public sealed class TokenService
             new(ClaimTypes.Role, rol.ToString())
         };
 
+        foreach (var permiso in Permisos.Para(rol))
+        {
+            claims.Add(new Claim("permiso", permiso));
+        }
+
         var credenciales = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey)),
             SecurityAlgorithms.HmacSha256);

@@ -33,11 +33,26 @@ public sealed class ProductRepository : IProductRepository
         return lista;
     }
 
-    public Task<bool> ExisteNombreAsync(Guid comercioId, string nombreNormalizado, CancellationToken cancellationToken = default)
+    public Task<bool> ExisteNombreAsync(Guid comercioId, string nombreNormalizado, Guid? excluirId = null, CancellationToken cancellationToken = default)
         => _db.Productos.AnyAsync(
-            p => p.ComercioId == comercioId && p.Activo && p.NombreNormalizado == nombreNormalizado,
+            p => p.ComercioId == comercioId
+                 && p.Activo
+                 && p.NombreNormalizado == nombreNormalizado
+                 && (!excluirId.HasValue || p.Id != excluirId.Value),
+            cancellationToken);
+
+    public Task<bool> ExisteCodigoBarrasAsync(Guid comercioId, string codigoBarras, Guid? excluirPresentacionId = null, CancellationToken cancellationToken = default)
+        => _db.Productos.AnyAsync(
+            p => p.ComercioId == comercioId
+                 && p.Activo
+                 && p.Presentaciones.Any(pr => pr.Activa
+                     && pr.CodigoBarras == codigoBarras
+                     && (!excluirPresentacionId.HasValue || pr.Id != excluirPresentacionId.Value)),
             cancellationToken);
 
     public void Add(Producto producto)
         => _db.Productos.Add(producto);
+
+    public void AddPresentacion(Presentacion presentacion)
+        => _db.Presentaciones.Add(presentacion);
 }

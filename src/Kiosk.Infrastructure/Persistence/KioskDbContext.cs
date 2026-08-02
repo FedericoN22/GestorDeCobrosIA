@@ -20,6 +20,7 @@ public class KioskDbContext : DbContext, IUnitOfWork
     public DbSet<Comercio> Comercios => Set<Comercio>();
     public DbSet<Categoria> Categorias => Set<Categoria>();
     public DbSet<Producto> Productos => Set<Producto>();
+    public DbSet<Presentacion> Presentaciones => Set<Presentacion>();
     public DbSet<MovimientoStock> MovimientosStock => Set<MovimientoStock>();
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<Caja> Cajas => Set<Caja>();
@@ -63,6 +64,7 @@ public class KioskDbContext : DbContext, IUnitOfWork
 
         modelBuilder.Entity<Presentacion>(e =>
         {
+            e.ToTable("presentacion");
             e.Property(p => p.Nombre).HasMaxLength(80).IsRequired();
             e.Property(p => p.CodigoBarras).HasMaxLength(32);
             e.HasIndex(p => p.ProductoId);

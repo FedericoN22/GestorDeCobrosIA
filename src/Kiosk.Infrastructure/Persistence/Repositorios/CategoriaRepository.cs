@@ -25,6 +25,13 @@ public sealed class CategoriaRepository : ICategoriaRepository
         return lista;
     }
 
+    public Task<bool> ExisteNombreAsync(Guid comercioId, string nombre, Guid? excluirId = null, CancellationToken cancellationToken = default)
+        => _db.Categorias.AnyAsync(
+            c => c.ComercioId == comercioId
+                 && c.Nombre == nombre.Trim()
+                 && (!excluirId.HasValue || c.Id != excluirId.Value),
+            cancellationToken);
+
     public void Add(Categoria categoria)
         => _db.Categorias.Add(categoria);
 }

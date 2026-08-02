@@ -89,6 +89,26 @@ public class PresentacionTests
     }
 
     [Fact]
+    public void CambiarNombre_ActualizaNombreYRecorta()
+    {
+        var presentacion = Presentacion.Crear(Guid.NewGuid(), "2.25L", 4200);
+        presentacion.CambiarNombre("  1L  ");
+
+        Assert.Equal("1L", presentacion.Nombre);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void CambiarNombre_Vacio_LanzaError(string? nombre)
+    {
+        var presentacion = Presentacion.Crear(Guid.NewGuid(), "2.25L", 4200);
+
+        AssertHelper.ThrowsDomain("PRESENTACION_NOMBRE_REQUERIDO", () => presentacion.CambiarNombre(nombre!));
+    }
+
+    [Fact]
     public void ActualizarStock_Negativo_LanzaError()
     {
         var presentacion = Presentacion.Crear(Guid.NewGuid(), "2.25L", 4200);

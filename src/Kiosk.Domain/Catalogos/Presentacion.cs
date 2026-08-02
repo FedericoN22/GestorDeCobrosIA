@@ -61,6 +61,16 @@ public class Presentacion
         PrecioVentaCentavos = precioVentaCentavos;
     }
 
+    public void CambiarNombre(string nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            throw new DomainException("PRESENTACION_NOMBRE_REQUERIDO", "El nombre de la presentación es obligatorio.");
+        }
+
+        Nombre = nombre.Trim();
+    }
+
     public void CambiarPrecioCosto(int? precioCostoCentavos)
     {
         if (precioCostoCentavos is < 0)

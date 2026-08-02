@@ -3,6 +3,7 @@ using Kiosk.Api.Auth;
 using Kiosk.Api.Middleware;
 using Kiosk.Api.Seed;
 using Kiosk.Application.CasosUso.Autenticacion;
+using Kiosk.Domain.Usuarios;
 using Kiosk.Application.CasosUso.Catalogos;
 using Kiosk.Application.CasosUso.Intenciones;
 using Kiosk.Application.CasosUso.Stock;
@@ -45,9 +46,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    foreach (var permiso in Permisos.Todos)
+    {
+        options.AddPolicy(permiso, policy => policy.RequireClaim("permiso", permiso));
+    }
+});
 
 builder.Services.AddScoped<ServicioAutenticacion>();
+builder.Services.AddScoped<ServicioCategorias>();
 builder.Services.AddScoped<ServicioProductos>();
 builder.Services.AddScoped<ServicioStock>();
 builder.Services.AddScoped<ServicioCaja>();

@@ -1,0 +1,54 @@
+@inject KioskApiClient Api
+
+<div class="input-group input-group-sm">
+    <input type="number" min="1" step="1" class="form-control" @bind="_cantidad" placeholder="Cant." aria-label="Cantidad" />
+    <input type="number" min="0" step="0.01" class="form-control" @bind="_costo" placeholder="Costo $" aria-label="Precio de costo" />
+    <button class="btn btn-outline-primary" @onclick="Cargar" disabled="@_cargando">Entrada</button>
+</div>
+@if (_exito)
+{
+    <div class="text-success small mt-1">Stock actualizado</div>
+}
+@if (_error is not null)
+{
+    <div class="text-danger small mt-1">@_error</div>
+}
+
+@code {
+    [Parameter]
+    public Guid PresentacionId { get; set; }
+
+    [Parameter]
+    public EventCallback OnCargada { get; set; }
+
+    private int _cantidad = 1;
+    private decimal? _costo;
+    private bool _cargando;
+    private bool _exito;
+    private string? _error;
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        _exito = false;
+        _error = null;
+        try
+        {
+            await Api.EntradaStockAsync(
+                PresentacionId,
+                _cantidad,
+                _costo is { } costo ? Moneda.Acentavos(costo) : null,
+                CancellationToken.None);
+            _exito = true;
+            await OnCargada.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+}

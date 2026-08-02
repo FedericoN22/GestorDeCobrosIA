@@ -1,0 +1,136 @@
+@page "/"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+
+@if (!Auth.IsAuthenticated)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<h1 class="mb-3">Productos</h1>
+
+<div class="d-flex justify-content-end mb-3">
+    <a class="btn btn-primary" href="/productos/crear">+ Nuevo producto</a>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_cargando)
+{
+    <p>Cargando…</p>
+}
+else if (_productos.Count == 0)
+{
+    <div class="alert alert-info">Todavía no hay productos.</div>
+}
+else
+{
+    @foreach (var producto in _productos)
+    {
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>@producto.Nombre</strong>
+                <span class="text-muted">@NombreCategoria(producto.CategoriaId)</span>
+            </div>
+            <div class="card-body">
+                @if (producto.Presentaciones.Count == 0)
+                {
+                    <p class="text-muted mb-0">Sin presentaciones.</p>
+                }
+                else
+                {
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Presentación</th>
+                                <th>Código</th>
+                                <th class="text-end">Precio venta</th>
+                                <th class="text-end">Stock</th>
+                                <th>Estado</th>
+                                <th style="min-width: 340px;">Cargar stock</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var presentacion in producto.Presentaciones)
+                            {
+                                <tr>
+                                    <td>@presentacion.Nombre</td>
+                                    <td class="text-muted">@(presentacion.CodigoBarras ?? "—")</td>
+                                    <td class="text-end">@Moneda.Formatear(presentacion.PrecioVentaCentavos)</td>
+                                    <td class="text-end">@presentacion.StockActual</td>
+                                    <td>
+                                        @if (presentacion.StockMinimo.HasValue && presentacion.StockActual <= presentacion.StockMinimo.Value)
+                                        {
+                                            <span class="badge bg-danger">Stock bajo</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">OK</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <EntradaStock PresentacionId="@presentacion.Id" OnCargada="CargarProductos" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<ProductoResponse> _productos = new();
+    private Dictionary<Guid, string> _categorias = new();
+    private bool _cargando = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated)
+        {
+            return;
+        }
+
+        await CargarProductos();
+    }
+
+    private string NombreCategoria(Guid? categoriaId)
+        => categoriaId is { } id && _categorias.TryGetValue(id, out var nombre) ? nombre : "Sin categoría";
+
+    private async Task CargarProductos()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            var productos = await Api.GetProductosAsync(CancellationToken.None);
+            var categorias = await Api.GetCategoriasAsync(CancellationToken.None);
+            _productos = productos.ToList();
+            _categorias = categorias.ToDictionary(c => c.Id, c => c.Nombre);
+        }
+        catch (ApiException ex)
+        {
+            if (ex.EsAutenticacion)
+            {
+                Auth.Limpiar();
+                Nav.NavigateTo("/login");
+            }
+            else
+            {
+                _error = ex.Message;
+            }
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+}
