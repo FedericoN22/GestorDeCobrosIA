@@ -14,4 +14,7 @@ public static class AuditoriaTipos
     public const string EntradaManual = "ENTRADA_MANUAL";
     public const string AjusteStock = "AJUSTE_STOCK";
     public const string StockMinimoConfigurado = "STOCK_MINIMO_CONFIGURADO";
+    public const string CajaAbierta = "CAJA_ABIERTA";
+    public const string CajaCerrada = "CAJA_CERRADA";
+    public const string VentaRegistrada = "VENTA_REGISTRADA";
 }

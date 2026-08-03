@@ -1,6 +1,8 @@
 using Kiosk.Application.Abstractions;
+using Kiosk.Application.Auditoria;
 using Kiosk.Application.Puertos;
 using Kiosk.Application.Puertos.Repositorios;
+using Kiosk.Domain.Auditoria;
 using Kiosk.Domain.Catalogos;
 using Kiosk.Domain.Common;
 using Kiosk.Domain.Stock;
@@ -14,6 +16,8 @@ public sealed record PagoCommand(MedioPago Medio, int MontoCentavos);
 
 public sealed record RegistrarVentaCommand(
     Guid ComercioId,
+    Guid? UsuarioId,
+    string Actor,
     Canal Origen,
     IReadOnlyList<LineaVentaCommand> Lineas,
     IReadOnlyList<PagoCommand> Pagos);
@@ -26,6 +30,7 @@ public sealed class ServicioVentas
     private readonly IVentaRepository _ventas;
     private readonly IProductRepository _productos;
     private readonly IStockLedger _stockLedger;
+    private readonly IAuditoriaRepository _auditoria;
     private readonly IUnitOfWork _unitOfWork;
 
     public ServicioVentas(
@@ -33,12 +38,14 @@ public sealed class ServicioVentas
         IVentaRepository ventas,
         IProductRepository productos,
         IStockLedger stockLedger,
+        IAuditoriaRepository auditoria,
         IUnitOfWork unitOfWork)
     {
         _cajas = cajas;
         _ventas = ventas;
         _productos = productos;
         _stockLedger = stockLedger;
+        _auditoria = auditoria;
         _unitOfWork = unitOfWork;
     }
 
@@ -65,6 +72,8 @@ public sealed class ServicioVentas
         var numero = await _ventas.GetProximoNumeroAsync(command.ComercioId, cancellationToken);
         var venta = Venta.Crear(command.ComercioId, caja.Id, numero, DateTime.UtcNow, clientGenerated: command.Origen == Canal.WHATSAPP);
 
+        var presentaciones = new Dictionary<Guid, Presentacion>();
+
         foreach (var linea in command.Lineas)
         {
             var producto = await _productos.GetByPresentacionIdAsync(linea.PresentacionId, cancellationToken);
@@ -88,6 +97,7 @@ public sealed class ServicioVentas
                 presentacion.Nombre,
                 linea.Cantidad,
                 presentacion.PrecioVentaCentavos);
+            presentaciones[presentacion.Id] = presentacion;
         }
 
         foreach (var pago in command.Pagos)
@@ -103,10 +113,40 @@ public sealed class ServicioVentas
             _stockLedger.Add(MovimientoStock.Venta(linea.PresentacionId, linea.Cantidad, venta.Id, command.Origen));
         }
 
+        var vuelto = Math.Max(0, venta.TotalPagadoCentavos - venta.TotalCentavos);
+        AuditoriaRegistrador.Registrar(
+            _auditoria,
+            command.ComercioId,
+            command.Origen,
+            command.Actor,
+            AuditoriaTipos.VentaRegistrada,
+            new
+            {
+                venta.Id,
+                venta.Numero,
+                venta.TotalCentavos,
+                venta.CajaId,
+                venta.Fecha,
+                command.Origen,
+                Lineas = venta.Lineas.Select(l => new { l.PresentacionId, l.Cantidad, l.PrecioUnitarioCentavos }),
+                Pagos = venta.Pagos.Select(p => new { p.Medio, p.MontoCentavos })
+            });
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var vuelto = Math.Max(0, venta.TotalPagadoCentavos - venta.TotalCentavos);
+        foreach (var presentacion in presentaciones.Values)
+        {
+            var stock = await _stockLedger.CalcularStockAsync(presentacion.Id, cancellationToken);
+            presentacion.ActualizarStock(stock);
+        }
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
         return Result<RegistrarVentaResult>.Ok(
             new RegistrarVentaResult(venta.Id, venta.Numero, venta.TotalCentavos, vuelto));
+    }
+
+    public async Task<Venta?> ObtenerAsync(Guid comercioId, Guid ventaId, CancellationToken cancellationToken = default)
+    {
+        var venta = await _ventas.GetByIdAsync(ventaId, cancellationToken);
+        return venta is not null && venta.ComercioId == comercioId ? venta : null;
     }
 }
