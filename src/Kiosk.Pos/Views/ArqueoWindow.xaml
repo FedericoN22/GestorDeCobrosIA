@@ -1,0 +1,45 @@
+<Window x:Class="Kiosk.Pos.Views.ArqueoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cierre de caja (arqueo)" Width="380" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="White">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="LblDiferencia" FontWeight="Bold" FontSize="14" Foreground="#1F3B57"
+                   TextWrapping="Wrap" Margin="0,0,0,12" />
+
+        <StackPanel Grid.Row="1">
+            <TextBlock Text="Efectivo declarado ($)" Foreground="#344054" FontSize="12" />
+            <TextBox x:Name="TxtEfectivo" Height="30" Margin="0,4,0,10" Padding="4,2" FontSize="14" VerticalContentAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2">
+            <TextBlock Text="Tarjeta declarada ($)" Foreground="#344054" FontSize="12" />
+            <TextBox x:Name="TxtTarjeta" Height="30" Margin="0,4,0,10" Padding="4,2" FontSize="14" VerticalContentAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3">
+            <TextBlock Text="Transferencia / QR declarado ($)" Foreground="#344054" FontSize="12" />
+            <TextBox x:Name="TxtQr" Height="30" Margin="0,4,0,14" Padding="4,2" FontSize="14" VerticalContentAlignment="Center" />
+        </StackPanel>
+
+        <TextBlock Grid.Row="4" x:Name="LblError" Foreground="#B42318" FontSize="12" TextWrapping="Wrap"
+                   Visibility="Collapsed" Margin="0,0,0,10" />
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancelar" Width="90" Height="34" Margin="0,0,8,0" Background="#EEF2F6"
+                    Foreground="#344054" BorderThickness="0" IsCancel="True" Click="BtnCancelar_Click" />
+            <Button x:Name="BtnConfirmar" Content="Cerrar caja" Width="110" Height="34" Background="#B54708"
+                    Foreground="White" BorderThickness="0" FontWeight="Bold" IsDefault="True" Click="BtnConfirmar_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

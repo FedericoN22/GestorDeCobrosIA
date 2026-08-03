@@ -1,0 +1,10 @@
+﻿<Application x:Class="Kiosk.Pos.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Kiosk.Pos"
+             xmlns:converters="clr-namespace:Kiosk.Pos.Converters">
+    <Application.Resources>
+        <converters:CentavosArsConverter x:Key="CentavosARSPrecio" />
+        <converters:StockBajoConverter x:Key="StockBajoARSC" />
+    </Application.Resources>
+</Application>
