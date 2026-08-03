@@ -25,6 +25,7 @@ public class PermisosTests
         Assert.Contains(Permisos.CajasAbrir, permisos);
         Assert.Contains(Permisos.CajasCerrar, permisos);
         Assert.Contains(Permisos.CajasConsultar, permisos);
+        Assert.Contains(Permisos.SyncOperar, permisos);
     }
 
     [Fact]

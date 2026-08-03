@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IAuditoriaRepository, AuditoriaRepository>();
         services.AddScoped<IConfiguracionRepository, ConfiguracionRepository>();
         services.AddScoped<IWhatsAppWhitelistRepository, WhatsAppWhitelistRepository>();
+        services.AddScoped<IOperacionSyncRepository, OperacionSyncRepository>();
         services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 
         return services;

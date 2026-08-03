@@ -150,7 +150,7 @@ namespace Kiosk.Infrastructure.Migrations
 
                     b.HasIndex("ProductoId");
 
-                    b.ToTable("presentacion");
+                    b.ToTable("presentacion", (string)null);
                 });
 
             modelBuilder.Entity("Kiosk.Domain.Catalogos.Producto", b =>
@@ -295,6 +295,50 @@ namespace Kiosk.Infrastructure.Migrations
                     b.HasIndex("PresentacionId", "CreatedAt");
 
                     b.ToTable("movimientos_stock");
+                });
+
+            modelBuilder.Entity("Kiosk.Domain.Sync.OperacionSync", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("AplicadaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("aplicada_en");
+
+                    b.Property<Guid>("ComercioId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("comercio_id");
+
+                    b.Property<DateTime?>("ConfirmadaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmada_en");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<string>("ResultadoJson")
+                        .HasColumnType("text")
+                        .HasColumnName("resultado_json");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("tipo");
+
+                    b.HasKey("Id")
+                        .HasName("pk_operaciones_sync");
+
+                    b.HasIndex("ComercioId", "AplicadaEn");
+
+                    b.HasIndex("ComercioId", "OperationId")
+                        .IsUnique();
+
+                    b.ToTable("operaciones_sync");
                 });
 
             modelBuilder.Entity("Kiosk.Domain.Usuarios.Usuario", b =>
@@ -668,6 +712,15 @@ namespace Kiosk.Infrastructure.Migrations
                     b.HasOne("Kiosk.Domain.Ventas.Venta", null)
                         .WithMany()
                         .HasForeignKey("VentaId");
+                });
+
+            modelBuilder.Entity("Kiosk.Domain.Sync.OperacionSync", b =>
+                {
+                    b.HasOne("Kiosk.Domain.Comercios.Comercio", null)
+                        .WithMany()
+                        .HasForeignKey("ComercioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Kiosk.Domain.Usuarios.Usuario", b =>

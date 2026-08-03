@@ -15,6 +15,29 @@ public class CajaTests
     }
 
     [Fact]
+    public void Abrir_ConIdYFechaExplicitos_LosRespeta()
+    {
+        var id = Guid.NewGuid();
+        var fecha = new DateTime(2026, 8, 1, 10, 0, 0, DateTimeKind.Utc);
+
+        var caja = Caja.Abrir(Guid.NewGuid(), Guid.NewGuid(), 0, id, fecha);
+
+        Assert.Equal(id, caja.Id);
+        Assert.Equal(fecha, caja.FechaApertura);
+    }
+
+    [Fact]
+    public void Cerrar_ConFechaExplicita_LaRespeta()
+    {
+        var caja = Caja.Abrir(Guid.NewGuid(), Guid.NewGuid(), 0);
+        var fecha = new DateTime(2026, 8, 1, 19, 0, 0, DateTimeKind.Utc);
+
+        caja.Cerrar(50000, 50000, fecha);
+
+        Assert.Equal(fecha, caja.FechaCierre);
+    }
+
+    [Fact]
     public void Abrir_ConMontoInicialNegativo_LanzaError()
     {
         AssertHelper.ThrowsDomain(

@@ -11,6 +11,7 @@ public static class Permisos
     public const string CajasAbrir = "cajas.abrir";
     public const string CajasCerrar = "cajas.cerrar";
     public const string CajasConsultar = "cajas.consultar";
+    public const string SyncOperar = "sync.operar";
     public const string ReportesVer = "reportes.ver";
     public const string GananciasVer = "ganancias.ver";
     public const string UsuariosGestionar = "usuarios.gestionar";
@@ -29,6 +30,7 @@ public static class Permisos
         CajasAbrir,
         CajasCerrar,
         CajasConsultar,
+        SyncOperar,
         ReportesVer,
         GananciasVer,
         UsuariosGestionar,
@@ -45,7 +47,8 @@ public static class Permisos
         VentasConsultar,
         CajasAbrir,
         CajasCerrar,
-        CajasConsultar
+        CajasConsultar,
+        SyncOperar
     };
 
     public static IReadOnlySet<string> Para(Rol rol) => rol switch

@@ -4,6 +4,7 @@ using Kiosk.Domain.Catalogos;
 using Kiosk.Domain.Comercios;
 using Kiosk.Domain.Configuracion;
 using Kiosk.Domain.Stock;
+using Kiosk.Domain.Sync;
 using Kiosk.Domain.Usuarios;
 using Kiosk.Domain.Ventas;
 using Kiosk.Domain.Whatsapp;
@@ -29,6 +30,7 @@ public class KioskDbContext : DbContext, IUnitOfWork
     public DbSet<WhatsappWhitelist> WhatsappWhitelist => Set<WhatsappWhitelist>();
     public DbSet<AuditoriaEvento> AuditoriaEventos => Set<AuditoriaEvento>();
     public DbSet<Configuracion> Configuraciones => Set<Configuracion>();
+    public DbSet<OperacionSync> OperacionesSync => Set<OperacionSync>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken cancellationToken)
         => base.SaveChangesAsync(cancellationToken);
@@ -145,6 +147,14 @@ public class KioskDbContext : DbContext, IUnitOfWork
             e.HasKey(c => new { c.ComercioId, c.Clave });
             e.Property(c => c.Clave).HasMaxLength(80).IsRequired();
             e.HasOne<Comercio>().WithMany().HasForeignKey(c => c.ComercioId);
+        });
+
+        modelBuilder.Entity<OperacionSync>(e =>
+        {
+            e.Property(o => o.Tipo).HasMaxLength(50).IsRequired();
+            e.HasIndex(o => new { o.ComercioId, o.OperationId }).IsUnique();
+            e.HasIndex(o => new { o.ComercioId, o.AplicadaEn });
+            e.HasOne<Comercio>().WithMany().HasForeignKey(o => o.ComercioId);
         });
     }
 }

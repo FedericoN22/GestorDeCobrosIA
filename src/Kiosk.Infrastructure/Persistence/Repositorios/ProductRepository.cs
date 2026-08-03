@@ -33,6 +33,16 @@ public sealed class ProductRepository : IProductRepository
         return lista;
     }
 
+    public async Task<IReadOnlyList<Producto>> GetTodosAsync(Guid comercioId, CancellationToken cancellationToken = default)
+    {
+        var lista = await _db.Productos
+            .Where(p => p.ComercioId == comercioId)
+            .Include(p => p.Presentaciones)
+            .OrderBy(p => p.Nombre)
+            .ToListAsync(cancellationToken);
+        return lista;
+    }
+
     public Task<bool> ExisteNombreAsync(Guid comercioId, string nombreNormalizado, Guid? excluirId = null, CancellationToken cancellationToken = default)
         => _db.Productos.AnyAsync(
             p => p.ComercioId == comercioId

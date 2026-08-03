@@ -7,6 +7,7 @@ using Kiosk.Domain.Usuarios;
 using Kiosk.Application.CasosUso.Catalogos;
 using Kiosk.Application.CasosUso.Intenciones;
 using Kiosk.Application.CasosUso.Stock;
+using Kiosk.Application.CasosUso.Sync;
 using Kiosk.Application.CasosUso.Ventas;
 using Kiosk.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -60,6 +61,7 @@ builder.Services.AddScoped<ServicioProductos>();
 builder.Services.AddScoped<ServicioStock>();
 builder.Services.AddScoped<ServicioCaja>();
 builder.Services.AddScoped<ServicioVentas>();
+builder.Services.AddScoped<ServicioSync>();
 builder.Services.AddScoped<ServicioIntenciones>();
 
 builder.Services.AddControllers();

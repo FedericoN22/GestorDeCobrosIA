@@ -22,11 +22,11 @@ public class Venta
 
     private Venta() { }
 
-    public static Venta Crear(Guid comercioId, Guid cajaId, int numero, DateTime fecha, bool clientGenerated = false)
+    public static Venta Crear(Guid comercioId, Guid cajaId, int numero, DateTime fecha, bool clientGenerated = false, Guid? id = null)
     {
         return new Venta
         {
-            Id = Guid.NewGuid(),
+            Id = id ?? Guid.NewGuid(),
             ComercioId = comercioId,
             CajaId = cajaId,
             Numero = numero,

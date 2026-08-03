@@ -23,7 +23,7 @@ public class Caja
 
     private Caja() { }
 
-    public static Caja Abrir(Guid comercioId, Guid usuarioId, int montoInicialCentavos)
+    public static Caja Abrir(Guid comercioId, Guid usuarioId, int montoInicialCentavos, Guid? id = null, DateTime? fechaApertura = null)
     {
         if (montoInicialCentavos < 0)
         {
@@ -32,16 +32,16 @@ public class Caja
 
         return new Caja
         {
-            Id = Guid.NewGuid(),
+            Id = id ?? Guid.NewGuid(),
             ComercioId = comercioId,
             UsuarioId = usuarioId,
-            FechaApertura = DateTime.UtcNow,
+            FechaApertura = fechaApertura ?? DateTime.UtcNow,
             MontoInicialCentavos = montoInicialCentavos,
             Estado = EstadoCaja.ABIERTA
         };
     }
 
-    public void Cerrar(int montoEsperadoCentavos, int montoDeclaradoCentavos)
+    public void Cerrar(int montoEsperadoCentavos, int montoDeclaradoCentavos, DateTime? fechaCierre = null)
     {
         if (Estado == EstadoCaja.CERRADA)
         {
@@ -56,7 +56,7 @@ public class Caja
         MontoEsperadoCentavos = montoEsperadoCentavos;
         MontoDeclaradoCentavos = montoDeclaradoCentavos;
         DiferenciaCentavos = montoDeclaradoCentavos - montoEsperadoCentavos;
-        FechaCierre = DateTime.UtcNow;
+        FechaCierre = fechaCierre ?? DateTime.UtcNow;
         Estado = EstadoCaja.CERRADA;
     }
 }
