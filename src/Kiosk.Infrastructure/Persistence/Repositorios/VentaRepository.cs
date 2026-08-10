@@ -27,6 +27,26 @@ public sealed class VentaRepository : IVentaRepository
         return (maximo ?? 0) + 1;
     }
 
+    public async Task<IReadOnlyList<Venta>> ObtenerEnRangoAsync(Guid comercioId, DateTime desde, DateTime hastaExclusivo, CancellationToken cancellationToken = default)
+    {
+        var lista = await _db.Ventas
+            .Include(v => v.Lineas)
+            .Include(v => v.Pagos)
+            .Where(v => v.ComercioId == comercioId && v.Fecha >= desde && v.Fecha < hastaExclusivo)
+            .OrderBy(v => v.Fecha)
+            .ToListAsync(cancellationToken);
+        return lista;
+    }
+
+    public async Task<IReadOnlyList<LineaVenta>> ObtenerLineasEnRangoAsync(Guid comercioId, DateTime desde, DateTime hastaExclusivo, CancellationToken cancellationToken = default)
+    {
+        var lista = await _db.Ventas
+            .Where(v => v.ComercioId == comercioId && v.Fecha >= desde && v.Fecha < hastaExclusivo)
+            .SelectMany(v => v.Lineas)
+            .ToListAsync(cancellationToken);
+        return lista;
+    }
+
     public void Add(Venta venta)
         => _db.Ventas.Add(venta);
 }

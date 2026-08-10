@@ -1,0 +1,146 @@
+@page "/reportes/auditoria"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (!Auth.IsAuthenticated)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<h1 class="mb-3">Auditoría</h1>
+
+<div class="row g-2 mb-3">
+    <div class="col-auto">
+        <label class="form-label">Desde</label>
+        <input type="date" class="form-control" @bind="_desde" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Hasta</label>
+        <input type="date" class="form-control" @bind="_hasta" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Canal</label>
+        <select class="form-select" @bind="_canal">
+            <option value="">Todos</option>
+            <option value="1">POS</option>
+            <option value="2">Panel web</option>
+            <option value="3">WhatsApp</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Actor</label>
+        <input type="text" class="form-control" @bind="_actor" placeholder="Usuario" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Tipo</label>
+        <input type="text" class="form-control" @bind="_tipo" placeholder="Ej. VENTA_REGISTRADA" />
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-primary" @onclick="Cargar" disabled="@_cargando">Consultar</button>
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-outline-secondary" @onclick="ExportarCsv" disabled="@_cargando">Exportar CSV</button>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_cargando)
+{
+    <p>Cargando…</p>
+}
+else if (_eventos.Count == 0)
+{
+    <div class="alert alert-info">No hay eventos de auditoría en el período.</div>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Canal</th>
+                <th>Actor</th>
+                <th>Tipo</th>
+                <th>Detalle</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var evento in _eventos)
+            {
+                <tr>
+                    <td>@evento.Fecha.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                    <td>@Etiquetas.Canal(evento.Canal)</td>
+                    <td>@evento.Actor</td>
+                    <td><code>@evento.Tipo</code></td>
+                    <td class="text-muted small"><pre class="mb-0">@(evento.DetalleJson ?? "—")</pre></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private DateTime _desde = DateTime.Today;
+    private DateTime _hasta = DateTime.Today;
+    private int? _canal;
+    private string _actor = string.Empty;
+    private string _tipo = string.Empty;
+    private List<AuditoriaEventoReporte> _eventos = new();
+    private bool _cargando = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            await Cargar();
+        }
+    }
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            _eventos = (await Api.GetAuditoriaAsync(_canal, _actor, _tipo, _desde, _hasta, CancellationToken.None)).ToList();
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task ExportarCsv()
+    {
+        var url = Api.UrlCsv($"api/reportes/auditoria.csv?desde={_desde:yyyy-MM-dd}&hasta={_hasta:yyyy-MM-dd}");
+        if (_canal.HasValue) url += $"&canal={_canal}";
+        if (!string.IsNullOrWhiteSpace(_actor)) url += $"&actor={Uri.EscapeDataString(_actor)}";
+        if (!string.IsNullOrWhiteSpace(_tipo)) url += $"&tipo={Uri.EscapeDataString(_tipo)}";
+        await JS.InvokeVoidAsync("descargarCsv", url, Auth.Token, "auditoria");
+    }
+
+    private void TratarError(ApiException ex)
+    {
+        if (ex.EsAutenticacion)
+        {
+            Auth.Limpiar();
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            _error = ex.Message;
+        }
+    }
+}

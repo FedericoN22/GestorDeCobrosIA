@@ -1,0 +1,164 @@
+@page "/reportes/ranking"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (!Auth.IsAuthenticated)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<h1 class="mb-3">Ranking de productos</h1>
+
+<div class="row g-2 mb-3">
+    <div class="col-auto">
+        <label class="form-label">Desde</label>
+        <input type="date" class="form-control" @bind="_desde" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Hasta</label>
+        <input type="date" class="form-control" @bind="_hasta" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Top N</label>
+        <input type="number" min="1" max="100" class="form-control" @bind="_top" />
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-primary" @onclick="Cargar" disabled="@_cargando">Consultar</button>
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-outline-secondary" @onclick="ExportarCsv" disabled="@_cargando">Exportar CSV</button>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_reporte is not null)
+{
+    <h5>Por unidades vendidas</h5>
+    @if (_reporte.PorUnidades.Count == 0)
+    {
+        <p class="text-muted">Sin ventas en el período.</p>
+    }
+    else
+    {
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Producto</th>
+                    <th>Presentación</th>
+                    <th class="text-end">Unidades</th>
+                    <th class="text-end">Ingresos</th>
+                    <th class="text-end">% del total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var (fila, indice) in _reporte.PorUnidades.Select((x, i) => (x, i + 1)))
+                {
+                    <tr>
+                        <td>@indice</td>
+                        <td>@fila.ProductoNombre</td>
+                        <td>@fila.PresentacionNombre</td>
+                        <td class="text-end">@fila.Unidades</td>
+                        <td class="text-end">@Moneda.Formatear(fila.IngresosCentavos)</td>
+                        <td class="text-end">@fila.PorcentajeDelTotal.ToString("N2") %</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h5>Por ingresos</h5>
+    @if (_reporte.PorIngresos.Count == 0)
+    {
+        <p class="text-muted">Sin ventas en el período.</p>
+    }
+    else
+    {
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Producto</th>
+                    <th>Presentación</th>
+                    <th class="text-end">Unidades</th>
+                    <th class="text-end">Ingresos</th>
+                    <th class="text-end">% del total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var (fila, indice) in _reporte.PorIngresos.Select((x, i) => (x, i + 1)))
+                {
+                    <tr>
+                        <td>@indice</td>
+                        <td>@fila.ProductoNombre</td>
+                        <td>@fila.PresentacionNombre</td>
+                        <td class="text-end">@fila.Unidades</td>
+                        <td class="text-end">@Moneda.Formatear(fila.IngresosCentavos)</td>
+                        <td class="text-end">@fila.PorcentajeDelTotal.ToString("N2") %</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private DateTime _desde = DateTime.Today;
+    private DateTime _hasta = DateTime.Today;
+    private int _top = 10;
+    private ReporteRankingResponse? _reporte;
+    private bool _cargando;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            await Cargar();
+        }
+    }
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            _reporte = await Api.GetRankingAsync(_desde, _hasta, _top, CancellationToken.None);
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task ExportarCsv()
+    {
+        var url = Api.UrlCsv($"api/reportes/ranking.csv?desde={_desde:yyyy-MM-dd}&hasta={_hasta:yyyy-MM-dd}&top={_top}");
+        await JS.InvokeVoidAsync("descargarCsv", url, Auth.Token, "ranking-de-productos");
+    }
+
+    private void TratarError(ApiException ex)
+    {
+        if (ex.EsAutenticacion)
+        {
+            Auth.Limpiar();
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            _error = ex.Message;
+        }
+    }
+}

@@ -70,6 +70,61 @@ public sealed class KioskApiClient
         return await LeerAsync<StockActualResponse>(respuesta, cancellationToken);
     }
 
+    public Uri BaseAddress => _http.BaseAddress!;
+
+    public string UrlCsv(string rutaRelativa)
+    {
+        var ruta = rutaRelativa.TrimStart('/');
+        return $"{_http.BaseAddress}{ruta}";
+    }
+
+    public async Task<ReporteVentasResponse> GetReporteVentasAsync(DateTime desde, DateTime hasta, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.GetAsync($"api/reportes/ventas?desde={desde:yyyy-MM-dd}&hasta={hasta:yyyy-MM-dd}", cancellationToken));
+        return await LeerAsync<ReporteVentasResponse>(respuesta, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<CierreCajaReporte>> GetCierresAsync(Guid? usuarioId, DateTime desde, DateTime hasta, bool soloDiferencias, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.GetAsync($"api/reportes/cierres?desde={desde:yyyy-MM-dd}&hasta={hasta:yyyy-MM-dd}&soloDiferencias={soloDiferencias}", cancellationToken));
+        return await LeerAsync<List<CierreCajaReporte>>(respuesta, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<MovimientoStockReporte>> GetMovimientosAsync(Guid? presentacionId, int? tipo, int? origen, Guid? usuarioId, DateTime desde, DateTime hasta, CancellationToken cancellationToken)
+    {
+        var consulta = $"api/reportes/movimientos?desde={desde:yyyy-MM-dd}&hasta={hasta:yyyy-MM-dd}";
+        if (presentacionId.HasValue) consulta += $"&presentacionId={presentacionId}";
+        if (tipo.HasValue) consulta += $"&tipo={tipo}";
+        if (origen.HasValue) consulta += $"&origen={origen}";
+        if (usuarioId.HasValue) consulta += $"&usuarioId={usuarioId}";
+
+        using var respuesta = await EnviarAsync(() => _http.GetAsync(consulta, cancellationToken));
+        return await LeerAsync<List<MovimientoStockReporte>>(respuesta, cancellationToken);
+    }
+
+    public async Task<ReporteGananciasResponse> GetGananciasAsync(DateTime desde, DateTime hasta, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.GetAsync($"api/reportes/ganancias?desde={desde:yyyy-MM-dd}&hasta={hasta:yyyy-MM-dd}", cancellationToken));
+        return await LeerAsync<ReporteGananciasResponse>(respuesta, cancellationToken);
+    }
+
+    public async Task<ReporteRankingResponse> GetRankingAsync(DateTime desde, DateTime hasta, int top, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.GetAsync($"api/reportes/ranking?desde={desde:yyyy-MM-dd}&hasta={hasta:yyyy-MM-dd}&top={top}", cancellationToken));
+        return await LeerAsync<ReporteRankingResponse>(respuesta, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AuditoriaEventoReporte>> GetAuditoriaAsync(int? canal, string? actor, string? tipo, DateTime desde, DateTime hasta, CancellationToken cancellationToken)
+    {
+        var consulta = $"api/reportes/auditoria?desde={desde:yyyy-MM-dd}&hasta={hasta:yyyy-MM-dd}";
+        if (canal.HasValue) consulta += $"&canal={canal}";
+        if (!string.IsNullOrWhiteSpace(actor)) consulta += $"&actor={Uri.EscapeDataString(actor)}";
+        if (!string.IsNullOrWhiteSpace(tipo)) consulta += $"&tipo={Uri.EscapeDataString(tipo)}";
+
+        using var respuesta = await EnviarAsync(() => _http.GetAsync(consulta, cancellationToken));
+        return await LeerAsync<List<AuditoriaEventoReporte>>(respuesta, cancellationToken);
+    }
+
     private async Task<HttpResponseMessage> EnviarAsync(Func<Task<HttpResponseMessage>> enviar)
     {
         _http.DefaultRequestHeaders.Authorization = string.IsNullOrEmpty(_auth.Token)

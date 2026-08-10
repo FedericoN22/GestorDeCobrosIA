@@ -1,0 +1,165 @@
+@page "/reportes/movimientos"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (!Auth.IsAuthenticated)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<h1 class="mb-3">Movimientos de stock</h1>
+
+<div class="row g-2 mb-3">
+    <div class="col-auto">
+        <label class="form-label">Desde</label>
+        <input type="date" class="form-control" @bind="_desde" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Hasta</label>
+        <input type="date" class="form-control" @bind="_hasta" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" @bind="_tipo">
+            <option value="">Todos</option>
+            <option value="1">Entrada</option>
+            <option value="2">Ajuste</option>
+            <option value="3">Venta</option>
+            <option value="4">Devolución</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Origen</label>
+        <select class="form-select" @bind="_origen">
+            <option value="">Todos</option>
+            <option value="1">POS</option>
+            <option value="2">Panel web</option>
+            <option value="3">WhatsApp</option>
+        </select>
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-primary" @onclick="Cargar" disabled="@_cargando">Consultar</button>
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-outline-secondary" @onclick="ExportarCsv" disabled="@_cargando">Exportar CSV</button>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_cargando)
+{
+    <p>Cargando…</p>
+}
+else if (_movimientos.Count == 0)
+{
+    <div class="alert alert-info">No hay movimientos de stock en el período.</div>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Producto</th>
+                <th>Presentación</th>
+                <th>Tipo</th>
+                <th class="text-end">Cantidad</th>
+                <th>Usuario</th>
+                <th>Origen</th>
+                <th>Motivo</th>
+                <th class="text-end">Stock actual</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var m in _movimientos)
+            {
+                <tr>
+                    <td>@m.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td>@m.ProductoNombre</td>
+                    <td>@m.PresentacionNombre</td>
+                    <td>@Etiquetas.TipoMovimiento(m.Tipo)</td>
+                    <td class="text-end @(m.Cantidad < 0 ? "text-danger" : "")">@m.Cantidad</td>
+                    <td>@(m.UsuarioNombre ?? "—")</td>
+                    <td>@Etiquetas.Canal(m.Origen)</td>
+                    <td>@(m.Motivo ?? "—")</td>
+                    <td class="text-end">@m.StockActual</td>
+                    <td>
+                        @if (m.StockBajo)
+                        {
+                            <span class="badge bg-danger">Stock bajo</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">OK</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private DateTime _desde = DateTime.Today;
+    private DateTime _hasta = DateTime.Today;
+    private int? _tipo;
+    private int? _origen;
+    private List<MovimientoStockReporte> _movimientos = new();
+    private bool _cargando = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            await Cargar();
+        }
+    }
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            _movimientos = (await Api.GetMovimientosAsync(null, _tipo, _origen, null, _desde, _hasta, CancellationToken.None)).ToList();
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task ExportarCsv()
+    {
+        var url = Api.UrlCsv($"api/reportes/movimientos.csv?desde={_desde:yyyy-MM-dd}&hasta={_hasta:yyyy-MM-dd}");
+        if (_tipo.HasValue) url += $"&tipo={_tipo}";
+        if (_origen.HasValue) url += $"&origen={_origen}";
+        await JS.InvokeVoidAsync("descargarCsv", url, Auth.Token, "movimientos-de-stock");
+    }
+
+    private void TratarError(ApiException ex)
+    {
+        if (ex.EsAutenticacion)
+        {
+            Auth.Limpiar();
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            _error = ex.Message;
+        }
+    }
+}

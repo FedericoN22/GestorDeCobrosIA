@@ -1,0 +1,162 @@
+@page "/reportes/ganancias"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (!Auth.IsAuthenticated)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<h1 class="mb-3">Ganancias</h1>
+
+<div class="row g-2 mb-3">
+    <div class="col-auto">
+        <label class="form-label">Desde</label>
+        <input type="date" class="form-control" @bind="_desde" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Hasta</label>
+        <input type="date" class="form-control" @bind="_hasta" />
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-primary" @onclick="Cargar" disabled="@_cargando">Consultar</button>
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-outline-secondary" @onclick="ExportarCsv" disabled="@_cargando">Exportar CSV</button>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_reporte is not null)
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted small">Ingresos</div>
+                    <div class="fs-4">@Moneda.Formatear(_reporte.IngresosCentavos)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted small">Costo de lo vendido</div>
+                    <div class="fs-4">@Moneda.Formatear(_reporte.CostoCentavos)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted small">Ganancia bruta</div>
+                    <div class="fs-4">@Moneda.Formatear(_reporte.GananciaCentavos)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted small">Margen</div>
+                    <div class="fs-4">@(_reporte.MargenPct is { } margen ? margen.ToString("N2") + " %" : "—")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h5>Por producto</h5>
+    @if (_reporte.PorProducto.Count == 0)
+    {
+        <p class="text-muted">Sin productos en el período.</p>
+    }
+    else
+    {
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Presentación</th>
+                    <th class="text-end">Unidades</th>
+                    <th class="text-end">Ingresos</th>
+                    <th class="text-end">Costo</th>
+                    <th class="text-end">Ganancia</th>
+                    <th class="text-end">Margen</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var fila in _reporte.PorProducto)
+                {
+                    <tr>
+                        <td>@fila.ProductoNombre</td>
+                        <td>@fila.PresentacionNombre</td>
+                        <td class="text-end">@fila.Unidades</td>
+                        <td class="text-end">@Moneda.Formatear(fila.IngresosCentavos)</td>
+                        <td class="text-end">@Moneda.Formatear(fila.CostoCentavos)</td>
+                        <td class="text-end @(fila.GananciaCentavos < 0 ? "text-danger" : "")">@Moneda.Formatear(fila.GananciaCentavos)</td>
+                        <td class="text-end">@(fila.MargenPct.HasValue ? fila.MargenPct.Value.ToString("N2") + " %" : "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private DateTime _desde = DateTime.Today;
+    private DateTime _hasta = DateTime.Today;
+    private ReporteGananciasResponse? _reporte;
+    private bool _cargando;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            await Cargar();
+        }
+    }
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            _reporte = await Api.GetGananciasAsync(_desde, _hasta, CancellationToken.None);
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task ExportarCsv()
+    {
+        var url = Api.UrlCsv($"api/reportes/ganancias.csv?desde={_desde:yyyy-MM-dd}&hasta={_hasta:yyyy-MM-dd}");
+        await JS.InvokeVoidAsync("descargarCsv", url, Auth.Token, "ganancias");
+    }
+
+    private void TratarError(ApiException ex)
+    {
+        if (ex.EsAutenticacion)
+        {
+            Auth.Limpiar();
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            _error = ex.Message;
+        }
+    }
+}

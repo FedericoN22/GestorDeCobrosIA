@@ -1,0 +1,136 @@
+@page "/reportes/cierres"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (!Auth.IsAuthenticated)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<h1 class="mb-3">Cierres de caja</h1>
+
+<div class="row g-2 mb-3">
+    <div class="col-auto">
+        <label class="form-label">Desde</label>
+        <input type="date" class="form-control" @bind="_desde" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Hasta</label>
+        <input type="date" class="form-control" @bind="_hasta" />
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="soloDiferencias" @bind="_soloDiferencias" />
+            <label class="form-check-label" for="soloDiferencias">Solo diferencias</label>
+        </div>
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-primary" @onclick="Cargar" disabled="@_cargando">Consultar</button>
+    </div>
+    <div class="col-auto d-flex align-items-end">
+        <button class="btn btn-outline-secondary" @onclick="ExportarCsv" disabled="@_cargando">Exportar CSV</button>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_cargando)
+{
+    <p>Cargando…</p>
+}
+else if (_cierres.Count == 0)
+{
+    <div class="alert alert-info">No hay cierres de caja en el período.</div>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Cajero</th>
+                <th>Apertura</th>
+                <th>Cierre</th>
+                <th class="text-end">Monto inicial</th>
+                <th class="text-end">Esperado</th>
+                <th class="text-end">Declarado</th>
+                <th class="text-end">Diferencia</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var cierre in _cierres)
+            {
+                <tr class="@(cierre.DiferenciaCentavos is not 0 ? "table-warning" : "")">
+                    <td>@cierre.CajeroNombre</td>
+                    <td>@cierre.FechaApertura.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td>@(cierre.FechaCierre?.ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                    <td class="text-end">@Moneda.Formatear(cierre.MontoInicialCentavos)</td>
+                    <td class="text-end">@(cierre.MontoEsperadoCentavos is { } esperado ? Moneda.Formatear(esperado) : "—")</td>
+                    <td class="text-end">@(cierre.MontoDeclaradoCentavos is { } declarado ? Moneda.Formatear(declarado) : "—")</td>
+                    <td class="text-end @(cierre.DiferenciaCentavos is not 0 ? "fw-bold text-danger" : "")">
+                        @(cierre.DiferenciaCentavos is { } diferencia ? Moneda.Formatear(diferencia) : "—")
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private DateTime _desde = DateTime.Today;
+    private DateTime _hasta = DateTime.Today;
+    private bool _soloDiferencias;
+    private List<CierreCajaReporte> _cierres = new();
+    private bool _cargando = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            await Cargar();
+        }
+    }
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            _cierres = (await Api.GetCierresAsync(null, _desde, _hasta, _soloDiferencias, CancellationToken.None)).ToList();
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task ExportarCsv()
+    {
+        var url = Api.UrlCsv($"api/reportes/cierres.csv?desde={_desde:yyyy-MM-dd}&hasta={_hasta:yyyy-MM-dd}&soloDiferencias={_soloDiferencias}");
+        await JS.InvokeVoidAsync("descargarCsv", url, Auth.Token, "cierres-de-caja");
+    }
+
+    private void TratarError(ApiException ex)
+    {
+        if (ex.EsAutenticacion)
+        {
+            Auth.Limpiar();
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            _error = ex.Message;
+        }
+    }
+}

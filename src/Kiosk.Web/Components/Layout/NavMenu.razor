@@ -1,4 +1,6 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@inject AuthState Auth
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">Kiosk</a>
     </div>
@@ -19,5 +21,52 @@
                 <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Nuevo producto
             </NavLink>
         </div>
+
+        @if (Auth.TienePermiso("reportes.ver") || Auth.TienePermiso("ganancias.ver") || Auth.TienePermiso("auditoria.ver"))
+        {
+            <div class="nav-item px-3 nav-heading">Reportes</div>
+
+            @if (Auth.TienePermiso("reportes.ver"))
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="reportes/ventas">
+                        <span class="bi bi-graph-up-nav-menu" aria-hidden="true"></span> Ventas
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="reportes/cierres">
+                        <span class="bi bi-cash-coin-nav-menu" aria-hidden="true"></span> Cierres de caja
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="reportes/movimientos">
+                        <span class="bi bi-arrow-left-right-nav-menu" aria-hidden="true"></span> Movimientos de stock
+                    </NavLink>
+                </div>
+            }
+
+            @if (Auth.TienePermiso("ganancias.ver"))
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="reportes/ganancias">
+                        <span class="bi bi-calculator-nav-menu" aria-hidden="true"></span> Ganancias
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="reportes/ranking">
+                        <span class="bi bi-trophy-nav-menu" aria-hidden="true"></span> Ranking de productos
+                    </NavLink>
+                </div>
+            }
+
+            @if (Auth.TienePermiso("auditoria.ver"))
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="reportes/auditoria">
+                        <span class="bi bi-shield-lock-nav-menu" aria-hidden="true"></span> Auditoría
+                    </NavLink>
+                </div>
+            }
+        }
     </nav>
 </div>

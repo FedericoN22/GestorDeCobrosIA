@@ -19,6 +19,15 @@ public sealed class UsuarioRepository : IUsuarioRepository
     public Task<Usuario?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => _db.Usuarios.FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, Usuario>> ObtenerPorIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+    {
+        var listaIds = ids.Distinct().ToList();
+        var lista = await _db.Usuarios
+            .Where(u => listaIds.Contains(u.Id))
+            .ToListAsync(cancellationToken);
+        return lista.ToDictionary(u => u.Id);
+    }
+
     public void Add(Usuario usuario)
         => _db.Usuarios.Add(usuario);
 }
