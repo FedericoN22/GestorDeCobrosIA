@@ -1,0 +1,140 @@
+@page "/whatsapp/config"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+
+@if (!Auth.IsAuthenticated)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<h1 class="mb-3">Configuración del bot</h1>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+@if (_exito is not null)
+{
+    <div class="alert alert-success">@_exito</div>
+}
+
+@if (_cargando)
+{
+    <p>Cargando…</p>
+}
+else
+{
+    <div class="row justify-content-center">
+        <div class="col-md-7">
+            <form @onsubmit="Guardar" @onsubmit:preventDefault="true">
+                <div class="mb-3">
+                    <label class="form-label">Nombre del bot *</label>
+                    <input class="form-control" @bind="_nombre" required />
+                    <div class="form-text">Se usa en la bienvenida y en los mensajes de ayuda.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Bienvenida</label>
+                    <textarea class="form-control" rows="3" @bind="_bienvenida" placeholder="Dejalo vacío para usar la ayuda por defecto"></textarea>
+                </div>
+
+                <div class="row">
+                    <div class="col mb-3">
+                        <label class="form-label">Confirmación (minutos) *</label>
+                        <input type="number" min="1" max="60" class="form-control" @bind="_tiempoConfirmacion" required />
+                        <div class="form-text">Tiempo para confirmar operaciones destructivas.</div>
+                    </div>
+                    <div class="col mb-3">
+                        <label class="form-label">Límite de mensajes por minuto *</label>
+                        <input type="number" min="1" max="100" class="form-control" @bind="_limiteMinutos" required />
+                        <div class="form-text">Máximo de mensajes por número por minuto.</div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" disabled="@_guardando">
+                        @(_guardando ? "Guardando…" : "Guardar")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@code {
+    private string _nombre = "";
+    private string _bienvenida = "";
+    private int _tiempoConfirmacion = 2;
+    private int _limiteMinutos = 10;
+    private bool _cargando = true;
+    private bool _guardando;
+    private string? _error;
+    private string? _exito;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            await Cargar();
+        }
+    }
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            var config = await Api.GetConfiguracionBotAsync(CancellationToken.None);
+            _nombre = config.Nombre;
+            _bienvenida = config.Bienvenida;
+            _tiempoConfirmacion = config.TiempoConfirmacionMinutos;
+            _limiteMinutos = config.LimiteMensajesPorMinuto;
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task Guardar()
+    {
+        _guardando = true;
+        _error = null;
+        _exito = null;
+        try
+        {
+            await Api.GuardarConfiguracionBotAsync(
+                new GuardarConfiguracionBotRequest(_nombre.Trim(), _bienvenida, _tiempoConfirmacion, _limiteMinutos),
+                CancellationToken.None);
+            _exito = "Configuración guardada.";
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private void TratarError(ApiException ex)
+    {
+        if (ex.EsAutenticacion)
+        {
+            Auth.Limpiar();
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            _error = ex.Message;
+        }
+    }
+}

@@ -125,6 +125,14 @@ public sealed record AuditoriaEventoReporte(
     string? DetalleJson,
     Guid? IntencionId);
 
+public sealed record WhatsappWhitelistResponse(Guid Id, string WhatsappNumero, bool Activo);
+
+public sealed record AgregarWhatsappWhitelistRequest(string WhatsappNumero);
+
+public sealed record ConfiguracionBotResponse(string Nombre, string Bienvenida, int TiempoConfirmacionMinutos, int LimiteMensajesPorMinuto);
+
+public sealed record GuardarConfiguracionBotRequest(string Nombre, string Bienvenida, int TiempoConfirmacionMinutos, int LimiteMensajesPorMinuto);
+
 public static class Etiquetas
 {
     public static string Medio(int medio) => medio switch

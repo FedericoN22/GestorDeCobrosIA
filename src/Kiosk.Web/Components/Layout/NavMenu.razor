@@ -68,5 +68,21 @@
                 </div>
             }
         }
+
+        @if (Auth.TienePermiso("whatsapp.operar"))
+        {
+            <div class="nav-item px-3 nav-heading">WhatsApp</div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="whatsapp/whitelist">
+                    <span class="bi bi-telephone-nav-menu" aria-hidden="true"></span> Números autorizados
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="whatsapp/config">
+                    <span class="bi bi-gear-nav-menu" aria-hidden="true"></span> Bot
+                </NavLink>
+            </div>
+        }
     </nav>
 </div>

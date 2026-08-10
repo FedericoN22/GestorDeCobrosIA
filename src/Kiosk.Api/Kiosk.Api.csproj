@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Kiosk.Application\Kiosk.Application.csproj" />
+    <ProjectReference Include="..\Kiosk.Ia\Kiosk.Ia.csproj" />
     <ProjectReference Include="..\Kiosk.Infrastructure\Kiosk.Infrastructure.csproj" />
   </ItemGroup>
 

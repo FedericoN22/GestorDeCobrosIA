@@ -125,6 +125,39 @@ public sealed class KioskApiClient
         return await LeerAsync<List<AuditoriaEventoReporte>>(respuesta, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<WhatsappWhitelistResponse>> GetWhatsappWhitelistAsync(CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.GetAsync("api/whatsapp/whitelist", cancellationToken));
+        return await LeerAsync<List<WhatsappWhitelistResponse>>(respuesta, cancellationToken);
+    }
+
+    public async Task<WhatsappWhitelistResponse> AgregarWhatsappWhitelistAsync(string whatsappNumero, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.PostAsJsonAsync(
+            "api/whatsapp/whitelist",
+            new AgregarWhatsappWhitelistRequest(whatsappNumero),
+            cancellationToken));
+        return await LeerAsync<WhatsappWhitelistResponse>(respuesta, cancellationToken);
+    }
+
+    public async Task<WhatsappWhitelistResponse> QuitarWhatsappWhitelistAsync(Guid id, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.DeleteAsync($"api/whatsapp/whitelist/{id}", cancellationToken));
+        return await LeerAsync<WhatsappWhitelistResponse>(respuesta, cancellationToken);
+    }
+
+    public async Task<ConfiguracionBotResponse> GetConfiguracionBotAsync(CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.GetAsync("api/whatsapp/config/bot", cancellationToken));
+        return await LeerAsync<ConfiguracionBotResponse>(respuesta, cancellationToken);
+    }
+
+    public async Task<ConfiguracionBotResponse> GuardarConfiguracionBotAsync(GuardarConfiguracionBotRequest request, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.PutAsJsonAsync("api/whatsapp/config/bot", request, cancellationToken));
+        return await LeerAsync<ConfiguracionBotResponse>(respuesta, cancellationToken);
+    }
+
     private async Task<HttpResponseMessage> EnviarAsync(Func<Task<HttpResponseMessage>> enviar)
     {
         _http.DefaultRequestHeaders.Authorization = string.IsNullOrEmpty(_auth.Token)

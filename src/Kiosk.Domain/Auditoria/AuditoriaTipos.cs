@@ -17,4 +17,14 @@ public static class AuditoriaTipos
     public const string CajaAbierta = "CAJA_ABIERTA";
     public const string CajaCerrada = "CAJA_CERRADA";
     public const string VentaRegistrada = "VENTA_REGISTRADA";
+    public const string IntencionRecibida = "INTENCION_RECIBIDA";
+    public const string IntencionEjecutada = "INTENCION_EJECUTADA";
+    public const string IntencionAclaracion = "INTENCION_ACLARACION";
+    public const string IntencionConfirmacion = "INTENCION_CONFIRMACION";
+    public const string IntencionCancelada = "INTENCION_CANCELADA";
+    public const string IntencionRechazada = "INTENCION_RECHAZADA";
+    public const string IntencionError = "INTENCION_ERROR";
+    public const string WhitelistAgregada = "WHITELIST_AGREGADA";
+    public const string WhitelistQuitada = "WHITELIST_QUITADA";
+    public const string ConfiguracionBotGuardada = "CONFIGURACION_BOT_GUARDADA";
 }

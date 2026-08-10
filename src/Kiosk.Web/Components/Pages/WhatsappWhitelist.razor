@@ -1,0 +1,166 @@
+@page "/whatsapp/whitelist"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+
+@if (!Auth.IsAuthenticated)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<h1 class="mb-3">Números autorizados</h1>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+@if (_exito is not null)
+{
+    <div class="alert alert-success">@_exito</div>
+}
+
+<div class="input-group mb-3">
+    <input type="text" class="form-control" @bind="_nuevoNumero" placeholder="Ej. 5491100000000" aria-label="Número de WhatsApp" />
+    <button class="btn btn-primary" @onclick="Agregar" disabled="@_cargando">Agregar</button>
+</div>
+
+@if (_cargando)
+{
+    <p>Cargando…</p>
+}
+else if (_entradas.Count == 0)
+{
+    <div class="alert alert-info">No hay números autorizados todavía.</div>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Número</th>
+                <th>Estado</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var entrada in _entradas)
+            {
+                <tr>
+                    <td>@entrada.WhatsappNumero</td>
+                    <td>
+                        @if (entrada.Activo)
+                        {
+                            <span class="text-success">Autorizado</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">Desactivado</span>
+                        }
+                    </td>
+                    <td class="text-end">
+                        @if (entrada.Activo)
+                        {
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => Quitar(entrada.Id)">Quitar</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<WhatsappWhitelistResponse> _entradas = new();
+    private string _nuevoNumero = "";
+    private bool _cargando = true;
+    private string? _error;
+    private string? _exito;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            await Cargar();
+        }
+    }
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            _entradas = (await Api.GetWhatsappWhitelistAsync(CancellationToken.None)).ToList();
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task Agregar()
+    {
+        if (string.IsNullOrWhiteSpace(_nuevoNumero))
+        {
+            return;
+        }
+
+        _cargando = true;
+        _error = null;
+        _exito = null;
+        try
+        {
+            await Api.AgregarWhatsappWhitelistAsync(_nuevoNumero.Trim(), CancellationToken.None);
+            _nuevoNumero = "";
+            _exito = "Número autorizado.";
+            await Cargar();
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task Quitar(Guid id)
+    {
+        _cargando = true;
+        _error = null;
+        _exito = null;
+        try
+        {
+            await Api.QuitarWhatsappWhitelistAsync(id, CancellationToken.None);
+            _exito = "Número quitado de la whitelist.";
+            await Cargar();
+        }
+        catch (ApiException ex)
+        {
+            TratarError(ex);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private void TratarError(ApiException ex)
+    {
+        if (ex.EsAutenticacion)
+        {
+            Auth.Limpiar();
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            _error = ex.Message;
+        }
+    }
+}

@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Text;
 using Kiosk.Api.Auth;
 using Kiosk.Api.Middleware;
@@ -10,6 +11,9 @@ using Kiosk.Application.CasosUso.Reportes;
 using Kiosk.Application.CasosUso.Stock;
 using Kiosk.Application.CasosUso.Sync;
 using Kiosk.Application.CasosUso.Ventas;
+using Kiosk.Application.CasosUso.Whatsapp;
+using Kiosk.Application.Puertos.Integraciones;
+using Kiosk.Ia;
 using Kiosk.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -65,6 +69,77 @@ builder.Services.AddScoped<ServicioVentas>();
 builder.Services.AddScoped<ServicioSync>();
 builder.Services.AddScoped<ServicioIntenciones>();
 builder.Services.AddScoped<ServicioReportes>();
+
+var openAi = builder.Configuration.GetSection("OpenAi");
+var openAiOptions = new OpenAiOptions(
+    openAi["ApiKey"] ?? string.Empty,
+    openAi["Modelo"] ?? "gpt-4o-mini",
+    openAi["ModeloWhisper"] ?? "whisper-1");
+
+var whatsapp = builder.Configuration.GetSection("Whatsapp");
+var metaOptions = new MetaOptions(
+    whatsapp["TokenAcceso"],
+    whatsapp["PhoneNumberId"],
+    whatsapp["VerifyToken"],
+    whatsapp["AppSecret"]);
+
+builder.Services.AddSingleton(openAiOptions);
+builder.Services.AddSingleton(metaOptions);
+
+builder.Services.AddHttpClient(nameof(OpenAiParser), client =>
+{
+    client.BaseAddress = new Uri("https://api.openai.com");
+    if (!string.IsNullOrWhiteSpace(openAiOptions.ApiKey))
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", openAiOptions.ApiKey);
+    }
+});
+
+builder.Services.AddHttpClient(nameof(WhisperTranscriber), client =>
+{
+    client.BaseAddress = new Uri("https://api.openai.com");
+    if (!string.IsNullOrWhiteSpace(openAiOptions.ApiKey))
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", openAiOptions.ApiKey);
+    }
+});
+
+builder.Services.AddHttpClient(nameof(MetaWhatsAppSender), client =>
+{
+    client.BaseAddress = new Uri("https://graph.facebook.com");
+    if (!string.IsNullOrWhiteSpace(metaOptions.TokenAcceso))
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", metaOptions.TokenAcceso);
+    }
+});
+
+builder.Services.AddHttpClient(nameof(MetaMediaDownloader), client =>
+{
+    client.BaseAddress = new Uri("https://graph.facebook.com");
+    if (!string.IsNullOrWhiteSpace(metaOptions.TokenAcceso))
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", metaOptions.TokenAcceso);
+    }
+});
+
+if (string.IsNullOrWhiteSpace(openAiOptions.ApiKey))
+{
+    builder.Services.AddScoped<IIaParser, StubParser>();
+}
+else
+{
+    builder.Services.AddScoped<IIaParser, OpenAiParser>();
+}
+
+builder.Services.AddScoped<ITranscriber, WhisperTranscriber>();
+builder.Services.AddScoped<IWhatsAppSender, MetaWhatsAppSender>();
+builder.Services.AddScoped<IWhatsAppMediaDownloader, MetaMediaDownloader>();
+
+builder.Services.AddSingleton<RateLimiterWhatsApp>();
+builder.Services.AddScoped<ResolvedorCatalogos>();
+builder.Services.AddScoped<EjecutorAcciones>();
+builder.Services.AddScoped<ServicioWhatsApp>();
+builder.Services.AddScoped<ServicioWhatsAppAdmin>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
