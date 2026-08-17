@@ -37,10 +37,10 @@ else
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>@producto.Nombre</strong>
                 <span class="text-muted">@NombreCategoria(producto.CategoriaId)</span>
-        @if (producto.Activo)
-        {
-            <button class="btn btn-sm btn-danger ms-2" @onclick="() => ConfirmarDesactivar(producto.Id)">Desactivar</button>
-        }
+                @if (producto.Activo)
+                {
+                    <button class="btn btn-sm btn-danger ms-2" @onclick="() => ConfirmarDesactivar(producto.Id)">Desactivar</button>
+                }
             </div>
             <div class="card-body">
                 @if (producto.Presentaciones.Count == 0)
@@ -69,7 +69,8 @@ else
                                     <td class="text-end">@Moneda.Formatear(presentacion.PrecioVentaCentavos)</td>
                                     <td class="text-end">@presentacion.StockActual</td>
                                     <td>
-                                        @if (presentacion.StockMinimo.HasValue && presentacion.StockActual <= presentacion.StockMinimo.Value)
+                                        @if (presentacion.StockMinimo.HasValue && presentacion.StockActual <=
+                        presentacion.StockMinimo.Value)
                                         {
                                             <span class="badge bg-danger">Stock bajo</span>
                                         }
@@ -97,7 +98,7 @@ else
     private bool _cargando = true;
     private string? _error;
     private Guid? _productoAEliminar;
-    private bool _eliminando;
+
 
     private async Task ConfirmarDesactivar(Guid productoId)
     {
@@ -110,7 +111,7 @@ else
     private async Task DesactivarProducto()
     {
         if (_productoAEliminar == null) return;
-        _eliminando = true;
+
         _error = null;
         try
         {
@@ -123,7 +124,7 @@ else
         }
         finally
         {
-            _eliminando = false;
+
             _productoAEliminar = null;
         }
     }
