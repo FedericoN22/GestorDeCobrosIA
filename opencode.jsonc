@@ -5,7 +5,7 @@
   // MODELO POR DEFECTO
   // ============================================================
 
-  "model": "opencode/deepseek-v4-flash-free",
+  "model": "opencode/mimo-v2.5-free",
 
   // ============================================================
   // COMPACTACIÓN
@@ -37,12 +37,5 @@
         "webfetch": "deny"
       }
     }
-  },
-
-  "implement": {
-  "description": "Implementa una funcionalidad concreta sin expandir su alcance",
-
-  "template": "Implementá únicamente la funcionalidad indicada por el usuario. Antes de modificar archivos, consultá docs/99-estado-actual.md y revisá solo los archivos directamente relacionados. No explores ni modifiques partes no relacionadas del proyecto salvo que exista una dependencia directa necesaria. Respetá las reglas de dominio, aislamiento por ComercioId, autorización, idempotencia, atomicidad y confirmaciones. No agregues funcionalidades ni hagas refactors no solicitados. Mantené los cambios mínimos necesarios. Actualizá o agregá tests directamente relacionados cuando corresponda. Al finalizar, ejecutá únicamente los tests relevantes y resumí los archivos modificados, tests ejecutados y problemas pendientes."
-}
-
+  }
 }
