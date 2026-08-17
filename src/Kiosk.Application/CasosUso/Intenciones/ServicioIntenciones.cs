@@ -41,7 +41,7 @@ public sealed class ServicioIntenciones
 
     public async Task<Result> ProcesarRespuestaAsync(ProcesarRespuestaCommand command, CancellationToken cancellationToken = default)
     {
-        var pendiente = await _intenciones.GetPendienteAsync(command.WhatsappNumero, cancellationToken);
+        var pendiente = await _intenciones.GetPendienteAsync(command.ComercioId, command.WhatsappNumero, cancellationToken);
         if (pendiente is null || pendiente.Estado != EstadoIntencion.ESPERANDO_CONFIRMACION)
         {
             return Result.Fail(new Error("WA_SIN_CONFIRMACION_PENDIENTE", "No hay una confirmación pendiente para este número."));

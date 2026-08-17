@@ -1,0 +1,48 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // ============================================================
+  // MODELO POR DEFECTO
+  // ============================================================
+
+  "model": "opencode/deepseek-v4-flash-free",
+
+  // ============================================================
+  // COMPACTACIÓN
+  // ============================================================
+
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "reserved": 10000
+  },
+
+  // ============================================================
+  // AGENTE REVIEWER
+  // ============================================================
+
+  "agent": {
+    "reviewer": {
+      "description": "Revisor de código de solo lectura para GestorDeCobrosIA",
+
+      "mode": "subagent",
+
+      "model": "opencode/mimo-v2.5-free",
+
+      "prompt": "{file:./.opencode/agents/reviewer.md}",
+
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "webfetch": "deny"
+      }
+    }
+  },
+
+  "implement": {
+  "description": "Implementa una funcionalidad concreta sin expandir su alcance",
+
+  "template": "Implementá únicamente la funcionalidad indicada por el usuario. Antes de modificar archivos, consultá docs/99-estado-actual.md y revisá solo los archivos directamente relacionados. No explores ni modifiques partes no relacionadas del proyecto salvo que exista una dependencia directa necesaria. Respetá las reglas de dominio, aislamiento por ComercioId, autorización, idempotencia, atomicidad y confirmaciones. No agregues funcionalidades ni hagas refactors no solicitados. Mantené los cambios mínimos necesarios. Actualizá o agregá tests directamente relacionados cuando corresponda. Al finalizar, ejecutá únicamente los tests relevantes y resumí los archivos modificados, tests ejecutados y problemas pendientes."
+}
+
+}

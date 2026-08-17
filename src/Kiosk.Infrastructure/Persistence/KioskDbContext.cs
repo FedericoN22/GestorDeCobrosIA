@@ -28,6 +28,7 @@ public class KioskDbContext : DbContext, IUnitOfWork
     public DbSet<Venta> Ventas => Set<Venta>();
     public DbSet<Intencion> Intenciones => Set<Intencion>();
     public DbSet<WhatsappWhitelist> WhatsappWhitelist => Set<WhatsappWhitelist>();
+    public DbSet<MensajeWhatsAppProcesado> MensajesWhatsAppProcesados => Set<MensajeWhatsAppProcesado>();
     public DbSet<AuditoriaEvento> AuditoriaEventos => Set<AuditoriaEvento>();
     public DbSet<Configuracion> Configuraciones => Set<Configuracion>();
     public DbSet<OperacionSync> OperacionesSync => Set<OperacionSync>();
@@ -133,6 +134,13 @@ public class KioskDbContext : DbContext, IUnitOfWork
             e.Property(w => w.WhatsappNumero).HasMaxLength(20).IsRequired();
             e.HasIndex(w => new { w.ComercioId, w.WhatsappNumero }).IsUnique();
             e.HasOne<Comercio>().WithMany().HasForeignKey(w => w.ComercioId);
+        });
+
+        modelBuilder.Entity<MensajeWhatsAppProcesado>(e =>
+        {
+            e.Property(m => m.MessageId).HasMaxLength(255).IsRequired();
+            e.HasIndex(m => new { m.ComercioId, m.MessageId }).IsUnique();
+            e.HasOne<Comercio>().WithMany().HasForeignKey(m => m.ComercioId);
         });
 
         modelBuilder.Entity<AuditoriaEvento>(e =>

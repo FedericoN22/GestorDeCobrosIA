@@ -3,6 +3,7 @@ using System;
 using Kiosk.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Kiosk.Infrastructure.Migrations
 {
     [DbContext(typeof(KioskPostgresDbContext))]
-    partial class KioskPostgresDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260811121804_AddWhatsAppMensajeProcesado")]
+    partial class AddWhatsAppMensajeProcesado
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

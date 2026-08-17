@@ -2,6 +2,7 @@
 @inject KioskApiClient Api
 @inject AuthState Auth
 @inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
 
 @if (!Auth.IsAuthenticated)
 {
@@ -36,6 +37,10 @@ else
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>@producto.Nombre</strong>
                 <span class="text-muted">@NombreCategoria(producto.CategoriaId)</span>
+        @if (producto.Activo)
+        {
+            <button class="btn btn-sm btn-danger ms-2" @onclick="() => ConfirmarDesactivar(producto.Id)">Desactivar</button>
+        }
             </div>
             <div class="card-body">
                 @if (producto.Presentaciones.Count == 0)
@@ -91,6 +96,37 @@ else
     private Dictionary<Guid, string> _categorias = new();
     private bool _cargando = true;
     private string? _error;
+    private Guid? _productoAEliminar;
+    private bool _eliminando;
+
+    private async Task ConfirmarDesactivar(Guid productoId)
+    {
+        var confirmar = await JSRuntime.InvokeAsync<bool>("confirm", "¿Está seguro de desactivar este producto? Esta acción no puede deshacerse.");
+        if (!confirmar) return;
+        _productoAEliminar = productoId;
+        await DesactivarProducto();
+    }
+
+    private async Task DesactivarProducto()
+    {
+        if (_productoAEliminar == null) return;
+        _eliminando = true;
+        _error = null;
+        try
+        {
+            await Api.DesactivarProductoAsync(_productoAEliminar.Value, CancellationToken.None);
+            await CargarProductos();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _eliminando = false;
+            _productoAEliminar = null;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

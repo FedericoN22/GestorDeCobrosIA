@@ -33,6 +33,8 @@ public sealed record StockActualResult(Guid PresentacionId, int StockActual, int
 
 public sealed class ServicioStock
 {
+    private static readonly SemaphoreSlim LockStock = new(1, 1);
+
     private readonly IProductRepository _productos;
     private readonly IStockLedger _stockLedger;
     private readonly IAuditoriaRepository _auditoria;
@@ -66,18 +68,29 @@ public sealed class ServicioStock
             presentacion.CambiarPrecioCosto(command.PrecioCostoCentavos);
         }
 
-        var movimiento = MovimientoStock.EntradaManual(command.PresentacionId, command.Cantidad, command.UsuarioId, command.Origen);
-        _stockLedger.Add(movimiento);
-        AuditoriaRegistrador.Registrar(
-            _auditoria,
-            command.ComercioId,
-            command.Origen,
-            command.Actor,
-            AuditoriaTipos.EntradaManual,
-            new { command.PresentacionId, command.Cantidad, command.PrecioCostoCentavos });
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await LockStock.WaitAsync(cancellationToken);
+        try
+        {
+            var movimiento = MovimientoStock.EntradaManual(command.PresentacionId, command.Cantidad, command.UsuarioId, command.Origen);
+            var stockActual = await _stockLedger.CalcularStockAsync(command.PresentacionId, cancellationToken);
+            var stockProyectado = stockActual + movimiento.Cantidad;
+            presentacion.ActualizarStock(stockProyectado);
+            _stockLedger.Add(movimiento);
+            AuditoriaRegistrador.Registrar(
+                _auditoria,
+                command.ComercioId,
+                command.Origen,
+                command.Actor,
+                AuditoriaTipos.EntradaManual,
+                new { command.PresentacionId, command.Cantidad, command.PrecioCostoCentavos });
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return await ActualizarSnapshotAsync(command.PresentacionId, presentacion, cancellationToken);
+            return Result<StockActualResult>.Ok(ToResult(presentacion));
+        }
+        finally
+        {
+            LockStock.Release();
+        }
     }
 
     public async Task<Result<StockActualResult>> AjusteAsync(
@@ -91,18 +104,35 @@ public sealed class ServicioStock
                 new Error("PRESENTACION_NO_ENCONTRADA", "La presentación no existe o está desactivada."));
         }
 
-        var movimiento = MovimientoStock.Ajuste(command.PresentacionId, command.Cantidad, command.Motivo, command.UsuarioId, command.Origen);
-        _stockLedger.Add(movimiento);
-        AuditoriaRegistrador.Registrar(
-            _auditoria,
-            command.ComercioId,
-            command.Origen,
-            command.Actor,
-            AuditoriaTipos.AjusteStock,
-            new { command.PresentacionId, command.Cantidad, command.Motivo });
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await LockStock.WaitAsync(cancellationToken);
+        try
+        {
+            var stockActual = await _stockLedger.CalcularStockAsync(command.PresentacionId, cancellationToken);
+            var stockProyectado = stockActual + command.Cantidad;
+            if (stockProyectado < 0)
+            {
+                return Result<StockActualResult>.Fail(
+                    new Error("STOCK_NEGATIVO", "El ajuste dejaría el stock en negativo."));
+            }
 
-        return await ActualizarSnapshotAsync(command.PresentacionId, presentacion, cancellationToken);
+            var movimiento = MovimientoStock.Ajuste(command.PresentacionId, command.Cantidad, command.Motivo, command.UsuarioId, command.Origen);
+            presentacion.ActualizarStock(stockProyectado);
+            _stockLedger.Add(movimiento);
+            AuditoriaRegistrador.Registrar(
+                _auditoria,
+                command.ComercioId,
+                command.Origen,
+                command.Actor,
+                AuditoriaTipos.AjusteStock,
+                new { command.PresentacionId, command.Cantidad, command.Motivo });
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return Result<StockActualResult>.Ok(ToResult(presentacion));
+        }
+        finally
+        {
+            LockStock.Release();
+        }
     }
 
     public async Task<Result<StockActualResult>> ConfigurarStockMinimoAsync(
@@ -124,18 +154,6 @@ public sealed class ServicioStock
             command.Actor,
             AuditoriaTipos.StockMinimoConfigurado,
             new { command.PresentacionId, command.StockMinimo });
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return Result<StockActualResult>.Ok(ToResult(presentacion));
-    }
-
-    private async Task<Result<StockActualResult>> ActualizarSnapshotAsync(
-        Guid presentacionId,
-        Presentacion presentacion,
-        CancellationToken cancellationToken)
-    {
-        var stock = await _stockLedger.CalcularStockAsync(presentacionId, cancellationToken);
-        presentacion.ActualizarStock(stock);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result<StockActualResult>.Ok(ToResult(presentacion));

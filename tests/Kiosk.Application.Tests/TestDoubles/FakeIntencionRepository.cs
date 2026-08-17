@@ -1,10 +1,9 @@
 using Kiosk.Application.Puertos.Repositorios;
 using Kiosk.Domain.Whatsapp;
-using Microsoft.EntityFrameworkCore;
 
-namespace Kiosk.Infrastructure.Persistence.Repositorios;
+namespace Kiosk.Application.Tests.TestDoubles;
 
-public sealed class IntencionRepository : IIntencionRepository
+public sealed class FakeIntencionRepository : IIntencionRepository
 {
     private static readonly EstadoIntencion[] EstadosPendientes =
     [
@@ -14,22 +13,22 @@ public sealed class IntencionRepository : IIntencionRepository
         EstadoIntencion.ESPERANDO_CONFIRMACION
     ];
 
-    private readonly KioskDbContext _db;
+    private readonly List<Intencion> _intenciones = [];
 
-    public IntencionRepository(KioskDbContext db)
-    {
-        _db = db;
-    }
+    public IReadOnlyList<Intencion> Intenciones => _intenciones;
+
+    public void Seed(Intencion intencion)
+        => _intenciones.Add(intencion);
 
     public Task<Intencion?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
-        => _db.Intenciones.FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+        => Task.FromResult(_intenciones.FirstOrDefault(i => i.Id == id));
 
     public Task<Intencion?> GetPendienteAsync(Guid comercioId, string whatsappNumero, CancellationToken cancellationToken = default)
-        => _db.Intenciones
+        => Task.FromResult(_intenciones
             .Where(i => i.ComercioId == comercioId && i.WhatsappNumero == whatsappNumero && EstadosPendientes.Contains(i.Estado))
             .OrderByDescending(i => i.CreatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefault());
 
     public void Add(Intencion intencion)
-        => _db.Intenciones.Add(intencion);
+        => _intenciones.Add(intencion);
 }

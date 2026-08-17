@@ -16,6 +16,7 @@ public sealed class WhatsAppController : ControllerBase
 {
     private readonly ServicioWhatsApp _servicio;
     private readonly IWhatsAppWhitelistRepository _whitelist;
+    private readonly IWhatsAppMensajeProcesadoRepository _mensajesProcesados;
     private readonly IWhatsAppMediaDownloader _mediaDownloader;
     private readonly ITranscriber _transcriber;
     private readonly IWhatsAppSender _sender;
@@ -24,6 +25,7 @@ public sealed class WhatsAppController : ControllerBase
     public WhatsAppController(
         ServicioWhatsApp servicio,
         IWhatsAppWhitelistRepository whitelist,
+        IWhatsAppMensajeProcesadoRepository mensajesProcesados,
         IWhatsAppMediaDownloader mediaDownloader,
         ITranscriber transcriber,
         IWhatsAppSender sender,
@@ -31,6 +33,7 @@ public sealed class WhatsAppController : ControllerBase
     {
         _servicio = servicio;
         _whitelist = whitelist;
+        _mensajesProcesados = mensajesProcesados;
         _mediaDownloader = mediaDownloader;
         _transcriber = transcriber;
         _sender = sender;
@@ -117,6 +120,11 @@ public sealed class WhatsAppController : ControllerBase
 
         var comercioId = await _whitelist.BuscarComercioActivoAsync(numero, ct);
         if (comercioId is not Guid comercio)
+        {
+            return;
+        }
+
+        if (!await _mensajesProcesados.IntentarRegistrarAsync(comercio, mensaje.Id, ct))
         {
             return;
         }

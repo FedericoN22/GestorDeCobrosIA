@@ -615,6 +615,36 @@ namespace Kiosk.Infrastructure.Migrations.Sqlite
                     b.ToTable("intenciones");
                 });
 
+            modelBuilder.Entity("Kiosk.Domain.Whatsapp.MensajeWhatsAppProcesado", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ComercioId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("comercio_id");
+
+                    b.Property<string>("MessageId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("message_id");
+
+                    b.Property<DateTime>("ProcesadoEn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("procesado_en");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mensajes_whats_app_procesados");
+
+                    b.HasIndex("ComercioId", "MessageId")
+                        .IsUnique();
+
+                    b.ToTable("mensajes_whats_app_procesados");
+                });
+
             modelBuilder.Entity("Kiosk.Domain.Whatsapp.WhatsappWhitelist", b =>
                 {
                     b.Property<Guid>("Id")
@@ -780,6 +810,15 @@ namespace Kiosk.Infrastructure.Migrations.Sqlite
                 });
 
             modelBuilder.Entity("Kiosk.Domain.Whatsapp.Intencion", b =>
+                {
+                    b.HasOne("Kiosk.Domain.Comercios.Comercio", null)
+                        .WithMany()
+                        .HasForeignKey("ComercioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Kiosk.Domain.Whatsapp.MensajeWhatsAppProcesado", b =>
                 {
                     b.HasOne("Kiosk.Domain.Comercios.Comercio", null)
                         .WithMany()

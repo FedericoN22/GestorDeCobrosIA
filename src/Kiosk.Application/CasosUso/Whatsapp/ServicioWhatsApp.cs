@@ -103,7 +103,7 @@ public sealed class ServicioWhatsApp
                 return await ResponderAsync(whatsappNumero, bienvenida, cancellationToken);
             }
 
-            var pendiente = await _intenciones.GetPendienteAsync(whatsappNumero, cancellationToken);
+            var pendiente = await _intenciones.GetPendienteAsync(comercioId, whatsappNumero, cancellationToken);
             if (pendiente is not null && pendiente.Estado == EstadoIntencion.ESPERANDO_CONFIRMACION)
             {
                 if (pendiente.ConfirmacionExpirada(DateTime.UtcNow))

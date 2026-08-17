@@ -146,6 +146,14 @@ public sealed class KioskApiClient
         return await LeerAsync<WhatsappWhitelistResponse>(respuesta, cancellationToken);
     }
 
+    // ---
+    // NUEVO: Desactivar producto
+    public async Task<ProductoResponse> DesactivarProductoAsync(Guid productoId, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.DeleteAsync($"api/productos/{productoId}", cancellationToken));
+        return await LeerAsync<ProductoResponse>(respuesta, cancellationToken);
+    }
+
     public async Task<ConfiguracionBotResponse> GetConfiguracionBotAsync(CancellationToken cancellationToken)
     {
         using var respuesta = await EnviarAsync(() => _http.GetAsync("api/whatsapp/config/bot", cancellationToken));
