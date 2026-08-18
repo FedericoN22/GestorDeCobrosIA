@@ -379,7 +379,7 @@ public sealed class AlmacenLocal
                        p.stock_actual, pr.nombre
                 FROM presentaciones p
                 JOIN productos pr ON pr.id = p.producto_id
-                WHERE p.activa = 1 AND (pr.nombre_normalizado LIKE $like OR p.nombre LIKE $like OR p.codigo_barras = $codigo)
+                WHERE p.activa = 1 AND pr.activo = 1 AND (pr.nombre_normalizado LIKE $like OR p.nombre LIKE $like OR p.codigo_barras = $codigo)
                 ORDER BY pr.nombre, p.nombre
                 LIMIT 30
                 """;
