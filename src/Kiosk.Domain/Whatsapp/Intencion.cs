@@ -18,24 +18,32 @@ public class Intencion
 {
     public Guid Id { get; private set; }
     public Guid ComercioId { get; private set; }
-    public string WhatsappNumero { get; private set; } = null!;
+
+    public Canal Canal { get; private set; }
+
+    public string CanalUsuarioId { get; private set; } = null!;
     public string TextoOriginal { get; private set; } = null!;
-    public bool FueAudio { get; private set; }
     public string? StructuredCommandJson { get; private set; }
-    public EstadoIntencion Estado { get; private set; }
     public string? Decision { get; private set; }
     public string? ResultadoJson { get; private set; }
+    
+    public bool FueAudio { get; private set; }
+
     public DateTime? ExpiraEn { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
+    public EstadoIntencion Estado { get; private set; }
+
+
+
     private Intencion() { }
 
-    public static Intencion Recibir(Guid comercioId, string whatsappNumero, string textoOriginal, bool fueAudio = false)
+    public static Intencion Recibir(Guid comercioId, Canal canal, string canalUsuarioId, string textoOriginal, bool fueAudio = false)
     {
-        if (string.IsNullOrWhiteSpace(whatsappNumero))
+        if (string.IsNullOrWhiteSpace(canalUsuarioId))
         {
-            throw new DomainException("INTENCION_NUMERO_REQUERIDO", "El número de WhatsApp es obligatorio.");
+            throw new DomainException("INTENCION_CANALUSUARIO_REQUERIDO", "El identificador de usuario para el canal es obligatorio.");
         }
 
         if (string.IsNullOrWhiteSpace(textoOriginal))
@@ -48,7 +56,8 @@ public class Intencion
         {
             Id = Guid.NewGuid(),
             ComercioId = comercioId,
-            WhatsappNumero = whatsappNumero.Trim(),
+            Canal = canal,
+            CanalUsuarioId = canalUsuarioId.Trim(),
             TextoOriginal = textoOriginal,
             FueAudio = fueAudio,
             Estado = EstadoIntencion.RECIBIDA,

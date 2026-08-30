@@ -1,5 +1,6 @@
 using Kiosk.Application.Puertos.Repositorios;
 using Kiosk.Domain.Whatsapp;
+using Kiosk.Domain.Common;
 
 namespace Kiosk.Application.Tests.TestDoubles;
 
@@ -23,9 +24,9 @@ public sealed class FakeIntencionRepository : IIntencionRepository
     public Task<Intencion?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => Task.FromResult(_intenciones.FirstOrDefault(i => i.Id == id));
 
-    public Task<Intencion?> GetPendienteAsync(Guid comercioId, string whatsappNumero, CancellationToken cancellationToken = default)
+    public Task<Intencion?> GetPendienteAsync(Guid comercioId, Canal canal, string canalUsuarioId, CancellationToken cancellationToken = default)
         => Task.FromResult(_intenciones
-            .Where(i => i.ComercioId == comercioId && i.WhatsappNumero == whatsappNumero && EstadosPendientes.Contains(i.Estado))
+            .Where(i => i.ComercioId == comercioId && i.Canal == canal && i.CanalUsuarioId == canalUsuarioId && EstadosPendientes.Contains(i.Estado))
             .OrderByDescending(i => i.CreatedAt)
             .FirstOrDefault());
 

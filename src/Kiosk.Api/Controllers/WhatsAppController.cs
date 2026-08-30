@@ -4,6 +4,7 @@ using Kiosk.Application.CasosUso.Whatsapp;
 using Kiosk.Application.Puertos.Integraciones;
 using Kiosk.Application.Puertos.Repositorios;
 using Kiosk.Domain.Usuarios;
+using Kiosk.Domain.Common;
 using Kiosk.Ia;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -103,7 +104,7 @@ public sealed class WhatsAppController : ControllerBase
             return NotFound(new { error = "NUMERO_NO_AUTORIZADO", message = "El número no está en la whitelist del comercio." });
         }
 
-        var respuesta = await _servicio.ProcesarMensajeAsync(comercio, request.Numero, request.Texto, false, cancellationToken);
+        var respuesta = await _servicio.ProcesarMensajeAsync(comercio, Canal.WHATSAPP, request.Numero, request.Texto, false, cancellationToken);
         return Ok(new SimularResponse(respuesta));
     }
 
@@ -138,7 +139,7 @@ public sealed class WhatsAppController : ControllerBase
         var texto = mensaje.Text?.Body;
         if (!string.IsNullOrWhiteSpace(texto))
         {
-            await _servicio.ProcesarMensajeAsync(comercio, numero, texto, false, ct);
+            await _servicio.ProcesarMensajeAsync(comercio, Canal.WHATSAPP, numero, texto, false, ct);
         }
     }
 
@@ -166,7 +167,7 @@ public sealed class WhatsAppController : ControllerBase
             return;
         }
 
-        await _servicio.ProcesarMensajeAsync(comercioId, numero, texto, true, ct);
+        await _servicio.ProcesarMensajeAsync(comercioId, Canal.WHATSAPP, numero, texto, true, ct);
     }
 
     private static IEnumerable<WebhookMessage> Mensajes(WebhookPayload payload)

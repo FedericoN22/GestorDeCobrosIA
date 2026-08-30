@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Kiosk.Application.CasosUso.Catalogos;
+using Kiosk.Application.CasosUso.Chat;
 using Kiosk.Application.CasosUso.Stock;
 using Kiosk.Application.CasosUso.Whatsapp;
 using Kiosk.Application.Intenciones;
+using Kiosk.Application.Puertos;
 using Kiosk.Application.Puertos.Integraciones;
 using Kiosk.Application.Tests.TestDoubles;
 using Kiosk.Domain.Auditoria;
@@ -29,9 +31,11 @@ public class ServicioWhatsAppTests
             var resolvedor = new ResolvedorCatalogos(Productos);
             var ejecutor = new EjecutorAcciones(stock, productos, resolvedor, Ledger);
 
+            var pipeline = new PipelineConversacional(
+                Intenciones, Uow, Config, Auditoria, Parser, resolvedor, ejecutor, Ledger);
+
             Servicio = new ServicioWhatsApp(
-                Whitelist, Intenciones, Uow, Config, Auditoria, Parser, Sender,
-                resolvedor, ejecutor, new RateLimiterWhatsApp(), Ledger);
+                Whitelist, Config, Sender, pipeline, new RateLimiterWhatsApp());
         }
 
         public FakeWhatsAppWhitelistRepository Whitelist { get; } = new();
@@ -77,7 +81,7 @@ public class ServicioWhatsAppTests
     private static Intencion SeedConfirmacionPendiente(Contexto ctx, AccionIntencion accion, string producto, string presentacion)
     {
         var comando = Comando(accion, 0.95m, producto, presentacion);
-        var pendiente = Intencion.Recibir(ComercioId, Numero, "mensaje original");
+        var pendiente = Intencion.Recibir(ComercioId, Canal.WHATSAPP, Numero, "mensaje original");
         pendiente.MarcarParseada(JsonSerializer.Serialize(comando));
         pendiente.PedirConfirmacion(DateTime.UtcNow.AddMinutes(5));
         ctx.Intenciones.Seed(pendiente);
@@ -89,7 +93,7 @@ public class ServicioWhatsAppTests
     {
         var ctx = new Contexto();
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "HOLA");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "HOLA");
 
         Assert.Equal(RespuestasBot.NoAutorizado, respuesta);
         Assert.Empty(ctx.Parser.Llamadas);
@@ -104,7 +108,7 @@ public class ServicioWhatsAppTests
         ctx.Config.Set(ComercioId, ClavesConfiguracion.BotBienvenida, "Bienvenido!");
         ctx.Config.Set(ComercioId, ClavesConfiguracion.BotNombre, "KioscoBot");
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "hola");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "hola");
 
         Assert.Equal("Bienvenido!", respuesta);
         Assert.Empty(ctx.Parser.Llamadas);
@@ -116,7 +120,7 @@ public class ServicioWhatsAppTests
         var ctx = new Contexto();
         ctx.Whitelist.Autorizar(ComercioId, Numero);
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "   ");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "   ");
 
         Assert.Equal(RespuestasBot.NoInterpretado("asistente"), respuesta);
     }
@@ -128,10 +132,10 @@ public class ServicioWhatsAppTests
         ctx.Whitelist.Autorizar(ComercioId, Numero);
         ctx.Config.Set(ComercioId, ClavesConfiguracion.BotLimiteMensajesPorMinuto, "2");
 
-        await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "HOLA");
-        await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "HOLA");
+        await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "HOLA");
+        await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "HOLA");
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "HOLA");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "HOLA");
 
         Assert.Equal(RespuestasBot.LimiteExcedido, respuesta);
     }
@@ -143,7 +147,7 @@ public class ServicioWhatsAppTests
         ctx.Whitelist.Autorizar(ComercioId, Numero);
         ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CONSULTAR_STOCK, 0.4m, "COCA")));
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "chisme raro");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "chisme raro");
 
         Assert.Equal(RespuestasBot.ConfianzaBaja("asistente"), respuesta);
         var intencion = ctx.Intenciones.Intenciones.Single();
@@ -159,7 +163,7 @@ public class ServicioWhatsAppTests
         ctx.Whitelist.Autorizar(ComercioId, Numero);
         ctx.Parser.Responder(ResultadoParseo.MultiComando("más de una instrucción"));
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "agregar x y eliminar y");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "agregar x y eliminar y");
 
         Assert.Equal(RespuestasBot.MultiComando, respuesta);
         var intencion = ctx.Intenciones.Intenciones.Single();
@@ -173,7 +177,7 @@ public class ServicioWhatsAppTests
         ctx.Whitelist.Autorizar(ComercioId, Numero);
         ctx.Parser.Responder(ResultadoParseo.Fallo("no entendí"));
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "asdfgh");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "asdfgh");
 
         Assert.Equal(RespuestasBot.NoInterpretado("asistente"), respuesta);
         var intencion = ctx.Intenciones.Intenciones.Single();
@@ -188,7 +192,7 @@ public class ServicioWhatsAppTests
         ctx.Parser.Responder(ResultadoParseo.Ok(Comando(
             AccionIntencion.AGREGAR_STOCK, 0.9m, "COCA", "1.5L", null, null, ["cantidad"])));
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "agregar coca");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "agregar coca");
 
         Assert.Equal(RespuestasBot.FaltanCampos(["cantidad"], []), respuesta);
         var intencion = ctx.Intenciones.Intenciones.Single();
@@ -202,7 +206,7 @@ public class ServicioWhatsAppTests
         ctx.Whitelist.Autorizar(ComercioId, Numero);
         ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CONSULTAR_STOCK, 0.95m, "FANTA", "600ML")));
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "cuanto stock hay de fanta 600ml");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "cuanto stock hay de fanta 600ml");
 
         Assert.Equal(RespuestasBot.NoEncontrado("No encontré 'FANTA' en el catálogo."), respuesta);
         var intencion = ctx.Intenciones.Intenciones.Single();
@@ -220,7 +224,7 @@ public class ServicioWhatsAppTests
         ctx.Productos.Seed(producto);
         ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CONSULTAR_STOCK, 0.95m, "COCA COLA")));
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "cuanto stock hay de coca cola");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "cuanto stock hay de coca cola");
 
         Assert.Equal(RespuestasBot.ElegiPresentacion("COCA COLA", ["1.5L", "600ML"]), respuesta);
         var intencion = ctx.Intenciones.Intenciones.Single();
@@ -236,7 +240,7 @@ public class ServicioWhatsAppTests
         ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 12, null, Canal.WEB));
         ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CONSULTAR_STOCK, 0.95m, "COCA COLA", "1.5L")));
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "cuanto stock hay de coca cola 1.5l");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "cuanto stock hay de coca cola 1.5l");
 
         Assert.Equal(RespuestasBot.StockConsultado("Coca Cola", "1.5L", 12, null), respuesta);
         var intencion = ctx.Intenciones.Intenciones.Single();
@@ -253,7 +257,7 @@ public class ServicioWhatsAppTests
         ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 5, null, Canal.WEB));
         ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.ELIMINAR_PRODUCTO, 0.95m, "COCA COLA", "1.5L")));
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "eliminar coca cola 1.5l");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "eliminar coca cola 1.5l");
 
         Assert.Equal(RespuestasBot.ConfirmarEliminar("Coca Cola", "1.5L", 5), respuesta);
         Assert.True(presentacion.Activa);
@@ -270,7 +274,7 @@ public class ServicioWhatsAppTests
         ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 5, null, Canal.WEB));
         var pendiente = SeedConfirmacionPendiente(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "SI");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "SI");
 
         Assert.Equal(RespuestasBot.ProductoEliminado("Coca Cola", "1.5L"), respuesta);
         Assert.False(presentacion.Activa);
@@ -286,7 +290,7 @@ public class ServicioWhatsAppTests
         ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 5, null, Canal.WEB));
         var pendiente = SeedConfirmacionPendiente(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "NO");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "NO");
 
         Assert.Equal(RespuestasBot.OperacionCancelada, respuesta);
         Assert.True(presentacion.Activa);
@@ -299,12 +303,12 @@ public class ServicioWhatsAppTests
         var ctx = new Contexto();
         ctx.Whitelist.Autorizar(ComercioId, Numero);
         var comando = Comando(AccionIntencion.ELIMINAR_PRODUCTO, 0.95m, "COCA COLA", "1.5L");
-        var pendiente = Intencion.Recibir(ComercioId, Numero, "mensaje original");
+        var pendiente = Intencion.Recibir(ComercioId, Canal.WHATSAPP, Numero, "mensaje original");
         pendiente.MarcarParseada(JsonSerializer.Serialize(comando));
         pendiente.PedirConfirmacion(DateTime.UtcNow.AddMinutes(-1));
         ctx.Intenciones.Seed(pendiente);
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "SI");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "SI");
 
         Assert.Equal(RespuestasBot.TimeoutExpirado, respuesta);
         Assert.Equal(EstadoIntencion.CANCELADA, pendiente.Estado);
@@ -320,7 +324,7 @@ public class ServicioWhatsAppTests
         var pendiente = SeedConfirmacionPendiente(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
         ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CONSULTAR_STOCK, 0.95m, "COCA COLA", "1.5L")));
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "cuanto stock hay de coca cola 1.5l");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "cuanto stock hay de coca cola 1.5l");
 
         Assert.Equal(EstadoIntencion.CANCELADA, pendiente.Estado);
         Assert.Equal(RespuestasBot.StockConsultado("Coca Cola", "1.5L", 5, null), respuesta);
@@ -337,12 +341,12 @@ public class ServicioWhatsAppTests
         ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 5, null, Canal.WEB));
 
         var comando = Comando(AccionIntencion.ELIMINAR_PRODUCTO, 0.95m, "COCA COLA", "1.5L");
-        var pendienteOtroComercio = Intencion.Recibir(otroComercio, Numero, "mensaje original");
+        var pendienteOtroComercio = Intencion.Recibir(otroComercio, Canal.WHATSAPP, Numero, "mensaje original");
         pendienteOtroComercio.MarcarParseada(JsonSerializer.Serialize(comando));
         pendienteOtroComercio.PedirConfirmacion(DateTime.UtcNow.AddMinutes(5));
         ctx.Intenciones.Seed(pendienteOtroComercio);
 
-        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Numero, "SI");
+        var respuesta = await ctx.Servicio.ProcesarMensajeAsync(ComercioId, Canal.WHATSAPP, Numero, "SI");
 
         Assert.Equal(EstadoIntencion.ESPERANDO_CONFIRMACION, pendienteOtroComercio.Estado);
         Assert.True(presentacion.Activa);

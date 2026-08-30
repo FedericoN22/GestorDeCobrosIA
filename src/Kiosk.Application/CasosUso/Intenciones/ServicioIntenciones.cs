@@ -1,13 +1,14 @@
 using Kiosk.Application.Abstractions;
 using Kiosk.Application.Puertos;
 using Kiosk.Application.Puertos.Repositorios;
+using Kiosk.Domain.Common;
 using Kiosk.Domain.Whatsapp;
 
 namespace Kiosk.Application.CasosUso.Intenciones;
 
-public sealed record RecibirIntencionCommand(Guid ComercioId, string WhatsappNumero, string Texto, bool FueAudio = false);
+public sealed record RecibirIntencionCommand(Guid ComercioId, Canal Canal, string CanalUsuarioId, string Texto, bool FueAudio = false);
 
-public sealed record ProcesarRespuestaCommand(Guid ComercioId, string WhatsappNumero, string Texto);
+public sealed record ProcesarRespuestaCommand(Guid ComercioId, Canal Canal, string CanalUsuarioId, string Texto);
 
 public sealed class ServicioIntenciones
 {
@@ -27,12 +28,12 @@ public sealed class ServicioIntenciones
 
     public async Task<Result<Guid>> RecibirAsync(RecibirIntencionCommand command, CancellationToken cancellationToken = default)
     {
-        if (!await _whitelist.EstaAutorizadoAsync(command.ComercioId, command.WhatsappNumero, cancellationToken))
+        if (!await _whitelist.EstaAutorizadoAsync(command.ComercioId, command.CanalUsuarioId, cancellationToken))
         {
             return Result<Guid>.Fail(new Error("WA_NO_AUTORIZADO", "El número no está autorizado para operar por WhatsApp."));
         }
 
-        var intencion = Intencion.Recibir(command.ComercioId, command.WhatsappNumero, command.Texto, command.FueAudio);
+        var intencion = Intencion.Recibir(command.ComercioId, command.Canal, command.CanalUsuarioId, command.Texto, command.FueAudio);
         _intenciones.Add(intencion);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -41,10 +42,10 @@ public sealed class ServicioIntenciones
 
     public async Task<Result> ProcesarRespuestaAsync(ProcesarRespuestaCommand command, CancellationToken cancellationToken = default)
     {
-        var pendiente = await _intenciones.GetPendienteAsync(command.ComercioId, command.WhatsappNumero, cancellationToken);
+        var pendiente = await _intenciones.GetPendienteAsync(command.ComercioId, command.Canal, command.CanalUsuarioId, cancellationToken);
         if (pendiente is null || pendiente.Estado != EstadoIntencion.ESPERANDO_CONFIRMACION)
         {
-            return Result.Fail(new Error("WA_SIN_CONFIRMACION_PENDIENTE", "No hay una confirmación pendiente para este número."));
+            return Result.Fail(new Error("WA_SIN_CONFIRMACION_PENDIENTE", "No hay una confirmación pendiente para este canal."));
         }
 
         var texto = command.Texto.Trim().ToUpperInvariant();

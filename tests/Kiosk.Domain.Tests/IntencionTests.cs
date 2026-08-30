@@ -1,4 +1,5 @@
 using Kiosk.Domain.Whatsapp;
+using Kiosk.Domain.Common;
 
 namespace Kiosk.Domain.Tests;
 
@@ -7,7 +8,7 @@ public class IntencionTests
     private static readonly Guid ComercioId = Guid.NewGuid();
 
     private static Intencion Recibir(string texto = "¿Cuánto stock hay de Coca Cola?")
-        => Intencion.Recibir(ComercioId, "+5491100000000", texto);
+        => Intencion.Recibir(ComercioId, Canal.WHATSAPP, "+5491100000000", texto);
 
     [Fact]
     public void Recibir_AsignaPropiedadesIniciales()
@@ -15,7 +16,7 @@ public class IntencionTests
         var intencion = Recibir();
 
         Assert.Equal(EstadoIntencion.RECIBIDA, intencion.Estado);
-        Assert.Equal("+5491100000000", intencion.WhatsappNumero);
+        Assert.Equal("+5491100000000", intencion.CanalUsuarioId);
         Assert.False(intencion.FueAudio);
         Assert.Null(intencion.StructuredCommandJson);
     }
@@ -27,8 +28,8 @@ public class IntencionTests
     public void Recibir_ConNumeroVacio_LanzaError(string? numero)
     {
         AssertHelper.ThrowsDomain(
-            "INTENCION_NUMERO_REQUERIDO",
-            () => Intencion.Recibir(ComercioId, numero!, "hola"));
+            "INTENCION_CANALUSUARIO_REQUERIDO",
+            () => Intencion.Recibir(ComercioId, Canal.WHATSAPP, numero!, "hola"));
     }
 
     [Theory]
@@ -39,7 +40,7 @@ public class IntencionTests
     {
         AssertHelper.ThrowsDomain(
             "INTENCION_TEXTO_REQUERIDO",
-            () => Intencion.Recibir(ComercioId, "+5491100000000", texto!));
+            () => Intencion.Recibir(ComercioId, Canal.WHATSAPP, "+5491100000000", texto!));
     }
 
     [Fact]

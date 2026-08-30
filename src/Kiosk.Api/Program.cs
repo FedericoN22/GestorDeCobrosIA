@@ -11,6 +11,7 @@ using Kiosk.Application.CasosUso.Reportes;
 using Kiosk.Application.CasosUso.Stock;
 using Kiosk.Application.CasosUso.Sync;
 using Kiosk.Application.CasosUso.Ventas;
+using Kiosk.Application.CasosUso.Chat;
 using Kiosk.Application.CasosUso.Whatsapp;
 using Kiosk.Application.Puertos.Integraciones;
 using Kiosk.Ia;
@@ -72,7 +73,7 @@ builder.Services.AddScoped<ServicioReportes>();
 
 var openAi = builder.Configuration.GetSection("OpenAi");
 var openAiOptions = new OpenAiOptions(
-    openAi["ApiKey"] ?? string.Empty,
+    builder.Configuration["OPENAI_API_KEY"] ?? string.Empty,
     openAi["Modelo"] ?? "gpt-4o-mini",
     openAi["ModeloWhisper"] ?? "whisper-1");
 
@@ -138,6 +139,8 @@ builder.Services.AddScoped<IWhatsAppMediaDownloader, MetaMediaDownloader>();
 builder.Services.AddSingleton<RateLimiterWhatsApp>();
 builder.Services.AddScoped<ResolvedorCatalogos>();
 builder.Services.AddScoped<EjecutorAcciones>();
+builder.Services.AddScoped<PipelineConversacional>();
+builder.Services.AddScoped<ServicioChat>();
 builder.Services.AddScoped<ServicioWhatsApp>();
 builder.Services.AddScoped<ServicioWhatsAppAdmin>();
 

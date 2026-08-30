@@ -1,5 +1,6 @@
 using Kiosk.Application.Puertos.Repositorios;
 using Kiosk.Domain.Whatsapp;
+using Kiosk.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kiosk.Infrastructure.Persistence.Repositorios;
@@ -24,9 +25,9 @@ public sealed class IntencionRepository : IIntencionRepository
     public Task<Intencion?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => _db.Intenciones.FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
 
-    public Task<Intencion?> GetPendienteAsync(Guid comercioId, string whatsappNumero, CancellationToken cancellationToken = default)
+    public Task<Intencion?> GetPendienteAsync(Guid comercioId, Canal canal, string canalUsuarioId, CancellationToken cancellationToken = default)
         => _db.Intenciones
-            .Where(i => i.ComercioId == comercioId && i.WhatsappNumero == whatsappNumero && EstadosPendientes.Contains(i.Estado))
+            .Where(i => i.ComercioId == comercioId && i.Canal == canal && i.CanalUsuarioId == canalUsuarioId && EstadosPendientes.Contains(i.Estado))
             .OrderByDescending(i => i.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
