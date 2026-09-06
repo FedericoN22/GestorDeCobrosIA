@@ -564,6 +564,16 @@ namespace Kiosk.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<int>("Canal")
+                        .HasColumnType("integer")
+                        .HasColumnName("canal");
+
+                    b.Property<string>("CanalUsuarioId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("canal_usuario_id");
+
                     b.Property<Guid>("ComercioId")
                         .HasColumnType("uuid")
                         .HasColumnName("comercio_id");
@@ -606,18 +616,12 @@ namespace Kiosk.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<string>("WhatsappNumero")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("whatsapp_numero");
-
                     b.HasKey("Id")
                         .HasName("pk_intenciones");
 
                     b.HasIndex("ComercioId");
 
-                    b.HasIndex("WhatsappNumero", "Estado");
+                    b.HasIndex("CanalUsuarioId", "Estado");
 
                     b.ToTable("intenciones");
                 });

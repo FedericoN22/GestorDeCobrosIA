@@ -122,7 +122,7 @@ public class KioskDbContext : DbContext, IUnitOfWork
 
         modelBuilder.Entity<Intencion>(e =>
         {
-            e.Property(i => i.CanalUsuarioId).HasMaxLength(20).IsRequired();
+            e.Property(i => i.CanalUsuarioId).HasMaxLength(128).IsRequired();
             e.Property(i => i.TextoOriginal).IsRequired();
             e.Property(i => i.Decision).HasMaxLength(100);
             e.HasIndex(i => new { i.CanalUsuarioId, i.Estado });

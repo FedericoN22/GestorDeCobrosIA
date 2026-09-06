@@ -557,6 +557,16 @@ namespace Kiosk.Infrastructure.Migrations.Sqlite
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<int>("Canal")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("canal");
+
+                    b.Property<string>("CanalUsuarioId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("canal_usuario_id");
+
                     b.Property<Guid>("ComercioId")
                         .HasColumnType("TEXT")
                         .HasColumnName("comercio_id");
@@ -599,18 +609,12 @@ namespace Kiosk.Infrastructure.Migrations.Sqlite
                         .HasColumnType("TEXT")
                         .HasColumnName("updated_at");
 
-                    b.Property<string>("WhatsappNumero")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("whatsapp_numero");
-
                     b.HasKey("Id")
                         .HasName("pk_intenciones");
 
                     b.HasIndex("ComercioId");
 
-                    b.HasIndex("WhatsappNumero", "Estado");
+                    b.HasIndex("CanalUsuarioId", "Estado");
 
                     b.ToTable("intenciones");
                 });
