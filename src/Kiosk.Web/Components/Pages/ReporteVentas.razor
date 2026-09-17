@@ -159,7 +159,7 @@
         }
         catch (ApiException ex)
         {
-            TratarError(ex);
+            await TratarError(ex);
         }
         finally
         {
@@ -173,11 +173,11 @@
         await JS.InvokeVoidAsync("descargarCsv", url, Auth.Token, "ventas-por-periodo");
     }
 
-    private void TratarError(ApiException ex)
+    private async Task TratarError(ApiException ex)
     {
         if (ex.EsAutenticacion)
         {
-            Auth.Limpiar();
+            await Auth.LimpiarAsync();
             Nav.NavigateTo("/login");
         }
         else

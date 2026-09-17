@@ -1,0 +1,121 @@
+@page "/chat"
+@inject KioskApiClient Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
+
+@if (!Auth.IsAuthenticated)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<div class="chat-container">
+    <div class="chat-header">
+        🤖 Bot de Gestión
+        <small>Consultá stock, precios, creá productos, etc. Cuando el bot pida confirmación, respondé SI / CONFIRMO / OK / DALE o NO / CANCELAR.</small>
+    </div>
+    <div class="chat-info-bar">
+        <code>SI</code> / <code>CONFIRMO</code> / <code>OK</code> / <code>DALE</code> para confirmar,
+        <code>NO</code> / <code>CANCELAR</code> para cancelar.
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div style="padding: 12px 24px 0;">
+            <div class="alert alert-danger py-2 mb-0">@_error</div>
+        </div>
+    }
+
+    <div class="chat-messages" @ref="_chatMessagesRef">
+        @if (_mensajes.Count == 0)
+        {
+            <div class="chat-empty">Empezá escribiendo "hola" o "ayuda".</div>
+        }
+        else
+        {
+            @foreach (var mensaje in _mensajes)
+            {
+                <div class="message-wrapper @(mensaje.EsMio ? "mine" : "")">
+                    <div class="message-avatar @(mensaje.EsMio ? "user" : "bot")">
+                        @(mensaje.EsMio ? "T" : "🤖")
+                    </div>
+                    <div>
+                        @if (!mensaje.EsMio)
+                        {
+                            <div class="message-sender">Bot</div>
+                        }
+                        <div class="message-bubble">@mensaje.Texto</div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <div class="chat-input-area">
+        <form @onsubmit="Enviar" @onsubmit:preventDefault="true">
+            <input type="text"
+                   class="form-control"
+                   placeholder="Escribí un mensaje..."
+                   @bind="_texto"
+                   @bind:event="oninput"
+                   disabled="@_enviando" />
+            <button type="submit" class="btn btn-primary" disabled="@(_enviando || string.IsNullOrWhiteSpace(_texto))">
+                @if (_enviando)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                }
+                else
+                {
+                    <span>➤</span>
+                }
+            </button>
+        </form>
+    </div>
+</div>
+
+@code {
+    private readonly List<MensajeChat> _mensajes = new();
+    private string _texto = string.Empty;
+    private bool _enviando;
+    private string? _error;
+    private ElementReference _chatMessagesRef;
+
+    private async Task Enviar()
+    {
+        if (string.IsNullOrWhiteSpace(_texto) || _enviando)
+        {
+            return;
+        }
+
+        var textoUsuario = _texto.Trim();
+        _texto = string.Empty;
+        _enviando = true;
+        _error = null;
+        _mensajes.Add(new MensajeChat(textoUsuario, true));
+
+        try
+        {
+            var respuesta = await Api.EnviarMensajeChatAsync(textoUsuario, CancellationToken.None);
+            _mensajes.Add(new MensajeChat(string.IsNullOrWhiteSpace(respuesta.Respuesta) ? "(sin respuesta)" : respuesta.Respuesta, false));
+        }
+        catch (ApiException ex)
+        {
+            if (ex.EsAutenticacion)
+            {
+                await Auth.LimpiarAsync();
+                Nav.NavigateTo("/login");
+                return;
+            }
+            _error = ex.Message;
+        }
+        finally
+        {
+            _enviando = false;
+        }
+
+        await JSRuntime.InvokeVoidAsync("scrollToBottom", _chatMessagesRef);
+    }
+
+    private sealed record MensajeChat(string Texto, bool EsMio);
+}

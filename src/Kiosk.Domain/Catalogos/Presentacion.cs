@@ -16,7 +16,7 @@ public class Presentacion
 
     private Presentacion() { }
 
-    public static Presentacion Crear(Guid productoId, string nombre, int precioVentaCentavos, int? precioCostoCentavos = null, string? codigoBarras = null)
+    public static Presentacion Crear(Guid productoId, string nombre, int precioVentaCentavos, int? precioCostoCentavos = null, string? codigoBarras = null, int? stockMinimo = null)
     {
         if (string.IsNullOrWhiteSpace(nombre))
         {
@@ -47,7 +47,8 @@ public class Presentacion
             PrecioVentaCentavos = precioVentaCentavos,
             PrecioCostoCentavos = precioCostoCentavos,
             Activa = true,
-            StockActual = 0
+            StockActual = 0,
+            StockMinimo = stockMinimo
         };
     }
 

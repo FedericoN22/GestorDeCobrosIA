@@ -118,13 +118,14 @@ public sealed class ProductosController : ApiControllerBase
                 request.PrecioVentaCentavos,
                 request.PrecioCostoCentavos,
                 request.CodigoBarras,
+                request.StockMinimo,
                 Username,
                 Canal),
             cancellationToken);
 
         return resultado.IsSuccess
             ? Ok(new PresentacionResponse(resultado.Value, request.Nombre, request.CodigoBarras,
-                request.PrecioVentaCentavos, request.PrecioCostoCentavos, true, 0, null, false))
+                request.PrecioVentaCentavos, request.PrecioCostoCentavos, true, 0, request.StockMinimo, false))
             : ErrorResponse(resultado.Error!);
     }
 
@@ -148,6 +149,7 @@ public sealed class ProductosController : ApiControllerBase
                 request.PrecioVentaCentavos,
                 request.PrecioCostoCentavos,
                 request.CodigoBarras,
+                request.StockMinimo,
                 Username,
                 Canal),
             cancellationToken);
@@ -198,9 +200,9 @@ public sealed record CrearProductoRequest(string Nombre, Guid? CategoriaId);
 
 public sealed record EditarProductoRequest(string Nombre, Guid? CategoriaId);
 
-public sealed record AgregarPresentacionRequest(string Nombre, int PrecioVentaCentavos, int? PrecioCostoCentavos, string? CodigoBarras);
+public sealed record AgregarPresentacionRequest(string Nombre, int PrecioVentaCentavos, int? PrecioCostoCentavos, string? CodigoBarras, int? StockMinimo);
 
-public sealed record EditarPresentacionRequest(string Nombre, int PrecioVentaCentavos, int? PrecioCostoCentavos, string? CodigoBarras);
+public sealed record EditarPresentacionRequest(string Nombre, int PrecioVentaCentavos, int? PrecioCostoCentavos, string? CodigoBarras, int? StockMinimo);
 
 public sealed record CrearProductoResponse(Guid ProductoId, Guid? PresentacionId);
 

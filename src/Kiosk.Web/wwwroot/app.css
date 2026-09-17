@@ -58,3 +58,72 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Visual hierarchy for product management */
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.card-body {
+    background-color: #ffffff;
+}
+
+.presentaciones-section {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 0.375rem;
+    padding: 0;
+    overflow: hidden;
+    background-color: #fafbfc;
+}
+
+.presentaciones-section .table thead th {
+    background-color: #e9ecef;
+    border-bottom: 2px solid rgba(0, 0, 0, 0.15);
+    font-weight: 600;
+    color: #212529;
+    vertical-align: bottom;
+}
+
+.presentaciones-section .table tbody td {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.075);
+    vertical-align: middle;
+}
+
+.presentaciones-section .table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.presentaciones-section .table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.table-sm th, .table-sm td {
+    padding: 0.5rem 0.75rem;
+}
+
+/* EntradaStock input group alignment within table */
+.presentaciones-section .input-group {
+    width: 100%;
+}
+
+.presentaciones-section .input-group .form-control {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+/* Ensure table is responsive on small screens */
+@media (max-width: 768px) {
+    .presentaciones-section {
+        overflow-x: auto;
+    }
+
+    .presentaciones-section .table {
+        min-width: 700px;
+    }
+}

@@ -17,6 +17,7 @@ public sealed record AgregarPresentacionCommand(
     int PrecioVentaCentavos,
     int? PrecioCostoCentavos,
     string? CodigoBarras,
+    int? StockMinimo,
     string Actor,
     Canal Origen);
 
@@ -31,6 +32,7 @@ public sealed record EditarPresentacionCommand(
     int PrecioVentaCentavos,
     int? PrecioCostoCentavos,
     string? CodigoBarras,
+    int? StockMinimo,
     string Actor,
     Canal Origen);
 
@@ -115,7 +117,8 @@ public sealed class ServicioProductos
             command.Nombre,
             command.PrecioVentaCentavos,
             command.PrecioCostoCentavos,
-            command.CodigoBarras);
+            command.CodigoBarras,
+            command.StockMinimo);
 
         _productos.AddPresentacion(presentacion);
 
@@ -207,6 +210,7 @@ public sealed class ServicioProductos
         presentacion.CambiarPrecioVenta(command.PrecioVentaCentavos);
         presentacion.CambiarPrecioCosto(command.PrecioCostoCentavos);
         presentacion.CambiarCodigoBarras(command.CodigoBarras);
+        presentacion.ConfigurarStockMinimo(command.StockMinimo);
 
         AuditoriaRegistrador.Registrar(_auditoria, command.ComercioId, command.Origen, command.Actor, AuditoriaTipos.PresentacionEditada,
             new { presentacion.Id, NombreProducto = producto.Nombre, presentacion.Nombre, presentacion.PrecioVentaCentavos, presentacion.CodigoBarras });

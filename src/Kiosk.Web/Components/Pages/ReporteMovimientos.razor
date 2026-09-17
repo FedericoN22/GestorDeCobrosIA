@@ -134,7 +134,7 @@ else
         }
         catch (ApiException ex)
         {
-            TratarError(ex);
+            await TratarError(ex);
         }
         finally
         {
@@ -150,11 +150,11 @@ else
         await JS.InvokeVoidAsync("descargarCsv", url, Auth.Token, "movimientos-de-stock");
     }
 
-    private void TratarError(ApiException ex)
+    private async Task TratarError(ApiException ex)
     {
         if (ex.EsAutenticacion)
         {
-            Auth.Limpiar();
+            await Auth.LimpiarAsync();
             Nav.NavigateTo("/login");
         }
         else

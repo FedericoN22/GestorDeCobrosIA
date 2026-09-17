@@ -25,3 +25,7 @@ window.descargarCsv = async function (url, token, nombreArchivo) {
         alert('Error al exportar el CSV: ' + error);
     }
 };
+
+window.scrollToBottom = function (elemento) {
+    elemento.scrollTop = elemento.scrollHeight;
+};

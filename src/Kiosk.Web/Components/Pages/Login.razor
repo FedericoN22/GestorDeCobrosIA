@@ -53,7 +53,7 @@
         try
         {
             var resultado = await Api.LoginAsync(_usuario.Trim(), _clave, CancellationToken.None);
-            Auth.Establecer(resultado.Token, resultado.Usuario);
+            await Auth.EstablecerAsync(resultado.Token, resultado.Usuario);
             Nav.NavigateTo("/");
         }
         catch (ApiException ex)

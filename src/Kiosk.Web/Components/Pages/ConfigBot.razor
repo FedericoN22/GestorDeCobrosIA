@@ -95,7 +95,7 @@ else
         }
         catch (ApiException ex)
         {
-            TratarError(ex);
+            await TratarError(ex);
         }
         finally
         {
@@ -117,7 +117,7 @@ else
         }
         catch (ApiException ex)
         {
-            TratarError(ex);
+            await TratarError(ex);
         }
         finally
         {
@@ -125,11 +125,11 @@ else
         }
     }
 
-    private void TratarError(ApiException ex)
+    private async Task TratarError(ApiException ex)
     {
         if (ex.EsAutenticacion)
         {
-            Auth.Limpiar();
+            await Auth.LimpiarAsync();
             Nav.NavigateTo("/login");
         }
         else

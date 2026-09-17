@@ -51,7 +51,7 @@ public class Producto
         CategoriaId = categoriaId;
     }
 
-    public Presentacion AgregarPresentacion(string nombre, int precioVentaCentavos, int? precioCostoCentavos = null, string? codigoBarras = null)
+    public Presentacion AgregarPresentacion(string nombre, int precioVentaCentavos, int? precioCostoCentavos = null, string? codigoBarras = null, int? stockMinimo = null)
     {
         if (string.IsNullOrWhiteSpace(nombre))
         {
@@ -69,7 +69,7 @@ public class Producto
             throw new DomainException("CODIGO_BARRAS_DUPLICADO", $"El código de barras '{codigoBarras}' ya está en uso en este producto.");
         }
 
-        var presentacion = Presentacion.Crear(Id, nombre, precioVentaCentavos, precioCostoCentavos, codigoBarras);
+        var presentacion = Presentacion.Crear(Id, nombre, precioVentaCentavos, precioCostoCentavos, codigoBarras, stockMinimo);
         _presentaciones.Add(presentacion);
         return presentacion;
     }

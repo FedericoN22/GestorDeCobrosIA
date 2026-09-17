@@ -61,6 +61,24 @@ public sealed class KioskApiClient
         return await LeerAsync<PresentacionResponse>(respuesta, cancellationToken);
     }
 
+    public async Task<PresentacionResponse> ObtenerProductoAsync(Guid id, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.GetAsync($"api/productos/{id}", cancellationToken));
+        return await LeerAsync<PresentacionResponse>(respuesta, cancellationToken);
+    }
+
+    public async Task<PresentacionResponse> EditarPresentacionAsync(Guid presentacionId, EditarPresentacionRequest request, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.PutAsJsonAsync($"api/productos/presentaciones/{presentacionId}", request, cancellationToken));
+        return await LeerAsync<PresentacionResponse>(respuesta, cancellationToken);
+    }
+
+    public async Task<PresentacionResponse> DesactivarPresentacionAsync(Guid presentacionId, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.DeleteAsync($"api/productos/presentaciones/{presentacionId}", cancellationToken));
+        return await LeerAsync<PresentacionResponse>(respuesta, cancellationToken);
+    }
+
     public async Task<StockActualResponse> EntradaStockAsync(Guid presentacionId, int cantidad, int? precioCostoCentavos, CancellationToken cancellationToken)
     {
         using var respuesta = await EnviarAsync(() => _http.PostAsJsonAsync(
@@ -164,6 +182,12 @@ public sealed class KioskApiClient
     {
         using var respuesta = await EnviarAsync(() => _http.PutAsJsonAsync("api/whatsapp/config/bot", request, cancellationToken));
         return await LeerAsync<ConfiguracionBotResponse>(respuesta, cancellationToken);
+    }
+
+    public async Task<ChatResponse> EnviarMensajeChatAsync(string texto, CancellationToken cancellationToken)
+    {
+        using var respuesta = await EnviarAsync(() => _http.PostAsJsonAsync("api/chat", new ChatRequest(texto), cancellationToken));
+        return await LeerAsync<ChatResponse>(respuesta, cancellationToken);
     }
 
     private async Task<HttpResponseMessage> EnviarAsync(Func<Task<HttpResponseMessage>> enviar)

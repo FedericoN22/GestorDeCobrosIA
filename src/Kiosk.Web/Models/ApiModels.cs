@@ -36,13 +36,19 @@ public sealed record CrearProductoRequest(string Nombre, Guid? CategoriaId);
 
 public sealed record CrearProductoResponse(Guid ProductoId, Guid? PresentacionId);
 
-public sealed record AgregarPresentacionRequest(string Nombre, int PrecioVentaCentavos, int? PrecioCostoCentavos, string? CodigoBarras);
+public sealed record AgregarPresentacionRequest(string Nombre, int PrecioVentaCentavos, int? PrecioCostoCentavos, string? CodigoBarras, int? StockMinimo);
+
+public sealed record EditarPresentacionRequest(string Nombre, int PrecioVentaCentavos, int? PrecioCostoCentavos, string? CodigoBarras, int? StockMinimo);
 
 public sealed record EntradaStockRequest(Guid PresentacionId, int Cantidad, int? PrecioCostoCentavos);
 
 public sealed record StockActualResponse(Guid PresentacionId, int StockActual, int? StockMinimo, bool StockBajo);
 
 public sealed record ErrorResponse(string? Error, string? Message);
+
+public sealed record ChatRequest(string Texto);
+
+public sealed record ChatResponse(string Respuesta);
 
 public sealed record VentaPorDiaReporte(DateTime Fecha, int TotalCentavos, int Cantidad);
 

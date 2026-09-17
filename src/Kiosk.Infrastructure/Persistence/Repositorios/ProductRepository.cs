@@ -27,7 +27,7 @@ public sealed class ProductRepository : IProductRepository
     {
         var lista = await _db.Productos
             .Where(p => p.ComercioId == comercioId && p.Activo)
-            .Include(p => p.Presentaciones)
+            .Include(p => p.Presentaciones.Where(pr => pr.Activa))
             .OrderBy(p => p.Nombre)
             .ToListAsync(cancellationToken);
         return lista;

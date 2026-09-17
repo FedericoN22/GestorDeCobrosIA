@@ -153,15 +153,16 @@ public sealed class EjecutorAcciones
             return Result<string>.Fail(new Error("PRECIO_REQUERIDO", "Para crear una presentación se necesita un precio de venta."));
         }
 
-        var presentacion = await _productos.AgregarPresentacionAsync(new AgregarPresentacionCommand(
-            comercioId,
-            creado.Value!.ProductoId,
-            p.Presentacion,
-            precioVenta,
-            null,
-            null,
-            actor,
-            Canal.WHATSAPP), ct);
+var presentacion = await _productos.AgregarPresentacionAsync(new AgregarPresentacionCommand(
+             comercioId,
+             creado.Value!.ProductoId,
+             p.Presentacion,
+             precioVenta,
+             null,
+             null,
+             null,
+             actor,
+             Canal.WHATSAPP), ct);
 
         if (!presentacion)
         {
@@ -175,15 +176,16 @@ public sealed class EjecutorAcciones
     {
         var presentacion = objetivo.Presentacion;
         var precioVentaCentavos = Acentavos(p.Precio!.Value);
-        var resultado = await _productos.EditarPresentacionAsync(new EditarPresentacionCommand(
-            comercioId,
-            presentacion.Id,
-            presentacion.Nombre,
-            precioVentaCentavos,
-            presentacion.PrecioCostoCentavos,
-            presentacion.CodigoBarras,
-            actor,
-            Canal.WHATSAPP), ct);
+var resultado = await _productos.EditarPresentacionAsync(new EditarPresentacionCommand(
+             comercioId,
+             presentacion.Id,
+             presentacion.Nombre,
+             precioVentaCentavos,
+             presentacion.PrecioCostoCentavos,
+             presentacion.CodigoBarras,
+             null,
+             actor,
+             Canal.WHATSAPP), ct);
 
         if (!resultado)
         {

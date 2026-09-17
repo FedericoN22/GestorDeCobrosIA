@@ -2,6 +2,8 @@
 @inject AuthState Auth
 @inject NavigationManager Nav
 
+@implements IDisposable
+
 <div class="page">
     <div class="sidebar">
         <NavMenu />
@@ -32,9 +34,25 @@
 </div>
 
 @code {
-    private void CerrarSesion()
+    protected override async Task OnInitializedAsync()
     {
-        Auth.Limpiar();
+        await Auth.InicializarAsync();
+        Auth.OnChange += OnAuthChange;
+    }
+
+    private void OnAuthChange()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CerrarSesion()
+    {
+        await Auth.LimpiarAsync();
         Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        Auth.OnChange -= OnAuthChange;
     }
 }

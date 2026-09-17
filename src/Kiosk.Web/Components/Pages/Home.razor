@@ -33,33 +33,82 @@ else
 {
     @foreach (var producto in _productos)
     {
-        <div class="card mb-3">
+        <div class="card mb-4 shadow-sm border">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>@producto.Nombre</strong>
                 <span class="text-muted">@NombreCategoria(producto.CategoriaId)</span>
                 @if (producto.Activo)
                 {
-                    <button class="btn btn-sm btn-danger ms-2" @onclick="() => ConfirmarDesactivar(producto.Id)">Desactivar</button>
+                    <button class="btn btn-sm btn-danger ms-2" @onclick="() => ConfirmarDesactivarProducto(producto.Id)">Desactivar</button>
                 }
             </div>
             <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted">@producto.Presentaciones.Count presentación(es)</span>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ToggleAgregarPresentacion(producto.Id)">
+                        + Agregar presentación
+                    </button>
+                </div>
+
+                @if (_presentacionesAgregando.Contains(producto.Id))
+                {
+                    <div class="border rounded p-3 mb-3 bg-light">
+                        <h6>Nueva presentación</h6>
+                        <div class="mb-2">
+                            <label class="form-label">Nombre *</label>
+                            <input class="form-control form-control-sm" @bind="_nuevaPresentacionNombre" placeholder="Ej: 500ml, Caja x12" />
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col">
+                                <label class="form-label">Precio venta ($) *</label>
+                                <input type="number" step="0.01" min="0" class="form-control form-control-sm" @bind="_nuevaPresentacionPrecio" />
+                            </div>
+                            <div class="col">
+                                <label class="form-label">Precio costo ($)</label>
+                                <input type="number" step="0.01" min="0" class="form-control form-control-sm" @bind="_nuevaPresentacionCosto" />
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col">
+                                <label class="form-label">Código de barras</label>
+                                <input class="form-control form-control-sm" @bind="_nuevaPresentacionCodigoBarras" />
+                            </div>
+                            <div class="col">
+                                <label class="form-label">Stock mínimo</label>
+                                <input type="number" min="0" class="form-control form-control-sm" @bind="_nuevaPresentacionStockMinimo" />
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" @onclick="() => AgregarPresentacion(producto.Id)">Guardar</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => CancelarAgregarPresentacion(producto.Id)">Cancelar</button>
+                        </div>
+                        @if (_agregarPresentacionError is not null)
+                        {
+                            <div class="text-danger small mt-2">@_agregarPresentacionError</div>
+                        }
+                    </div>
+                }
+
                 @if (producto.Presentaciones.Count == 0)
                 {
                     <p class="text-muted mb-0">Sin presentaciones.</p>
                 }
                 else
                 {
-                    <table class="table table-sm align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>Presentación</th>
-                                <th>Código</th>
-                                <th class="text-end">Precio venta</th>
-                                <th class="text-end">Stock</th>
-                                <th>Estado</th>
-                                <th style="min-width: 340px;">Cargar stock</th>
-                            </tr>
-                        </thead>
+                    <div class="presentaciones-section">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Presentación</th>
+                                    <th>Código</th>
+                                    <th class="text-end">Precio venta</th>
+                                    <th class="text-end">Stock</th>
+                                    <th class="text-end">Stock mín.</th>
+                                    <th>Estado</th>
+                                    <th style="min-width: 200px;">Añadir stock</th>
+                                    <th style="min-width: 180px;">Acciones</th>
+                                </tr>
+                            </thead>
                         <tbody>
                             @foreach (var presentacion in producto.Presentaciones)
                             {
@@ -68,9 +117,9 @@ else
                                     <td class="text-muted">@(presentacion.CodigoBarras ?? "—")</td>
                                     <td class="text-end">@Moneda.Formatear(presentacion.PrecioVentaCentavos)</td>
                                     <td class="text-end">@presentacion.StockActual</td>
+                                    <td class="text-end">@(presentacion.StockMinimo.HasValue ? presentacion.StockMinimo.Value.ToString() : "—")</td>
                                     <td>
-                                        @if (presentacion.StockMinimo.HasValue && presentacion.StockActual <=
-                        presentacion.StockMinimo.Value)
+                                        @if (presentacion.StockMinimo.HasValue && presentacion.StockActual <= presentacion.StockMinimo.Value)
                                         {
                                             <span class="badge bg-danger">Stock bajo</span>
                                         }
@@ -82,10 +131,56 @@ else
                                     <td>
                                         <EntradaStock PresentacionId="@presentacion.Id" OnCargada="CargarProductos" />
                                     </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" @onclick="() => ToggleEditarPresentacion(presentacion.Id, producto.Id)" title="Editar">Editar</button>
+                                            <button class="btn btn-outline-danger" @onclick="() => ConfirmarDesactivarPresentacion(presentacion.Id)" title="Eliminar">Eliminar</button>
+                                        </div>
+                                    </td>
                                 </tr>
+
+                                @if (_presentacionEditando == presentacion.Id)
+                                {
+                                    <tr>
+                                        <td colspan="9">
+                                            <div class="border rounded p-3 bg-light">
+                                                <h6>Editar presentación</h6>
+                                                <div class="mb-2">
+                                                    <label class="form-label">Nombre *</label>
+                                                    <input class="form-control form-control-sm" @bind="_editarPresentacionNombre" />
+                                                </div>
+                                                <div class="row mb-2">
+                                                    <div class="col">
+                                                        <label class="form-label">Precio venta ($) *</label>
+                                                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" @bind="_editarPresentacionPrecio" />
+                                                    </div>
+                                                    <div class="col">
+                                                        <label class="form-label">Precio costo ($)</label>
+                                                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" @bind="_editarPresentacionCosto" />
+                                                    </div>
+                                                </div>
+                                                <div class="row mb-2">
+                                                    <div class="col">
+                                                        <label class="form-label">Código de barras</label>
+                                                        <input class="form-control form-control-sm" @bind="_editarPresentacionCodigoBarras" />
+                                                    </div>
+                                                    <div class="col">
+                                                        <label class="form-label">Stock mínimo</label>
+                                                        <input type="number" min="0" class="form-control form-control-sm" @bind="_editarPresentacionStockMinimo" />
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex gap-2">
+                                                    <button class="btn btn-sm btn-primary" @onclick="() => GuardarEditarPresentacion(presentacion.Id, producto.Id)">Guardar</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => CancelarEditarPresentacion()">Cancelar</button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
                             }
                         </tbody>
                     </table>
+                    </div>
                 }
             </div>
         </div>
@@ -99,8 +194,150 @@ else
     private string? _error;
     private Guid? _productoAEliminar;
 
+    private HashSet<Guid> _presentacionesAgregando = new();
+    private string _nuevaPresentacionNombre = "";
+    private decimal _nuevaPresentacionPrecio;
+    private decimal _nuevaPresentacionCosto;
+    private string _nuevaPresentacionCodigoBarras = "";
+    private int _nuevaPresentacionStockMinimo;
+    private string? _agregarPresentacionError;
 
-    private async Task ConfirmarDesactivar(Guid productoId)
+    private Guid? _presentacionEditando;
+    private Guid? _editarPresentacionProductoId;
+    private string _editarPresentacionNombre = "";
+    private decimal _editarPresentacionPrecio;
+    private decimal _editarPresentacionCosto;
+    private string _editarPresentacionCodigoBarras = "";
+    private int _editarPresentacionStockMinimo;
+
+    private async Task ToggleAgregarPresentacion(Guid productoId)
+    {
+        if (_presentacionesAgregando.Contains(productoId))
+        {
+            _presentacionesAgregando.Remove(productoId);
+            LimpiarFormularioNuevaPresentacion();
+        }
+        else
+        {
+            _presentacionesAgregando.Add(productoId);
+            _agregarPresentacionError = null;
+        }
+    }
+
+    private void LimpiarFormularioNuevaPresentacion()
+    {
+        _nuevaPresentacionNombre = "";
+        _nuevaPresentacionPrecio = 0;
+        _nuevaPresentacionCosto = 0;
+        _nuevaPresentacionCodigoBarras = "";
+        _nuevaPresentacionStockMinimo = 0;
+        _agregarPresentacionError = null;
+    }
+
+    private async Task AgregarPresentacion(Guid productoId)
+    {
+        _agregarPresentacionError = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_nuevaPresentacionNombre))
+            {
+                _agregarPresentacionError = "El nombre de la presentación es obligatorio.";
+                return;
+            }
+            await Api.AgregarPresentacionAsync(
+                productoId,
+                new AgregarPresentacionRequest(
+                    _nuevaPresentacionNombre.Trim(),
+                    Moneda.Acentavos(_nuevaPresentacionPrecio),
+                    _nuevaPresentacionCosto is { } costo ? Moneda.Acentavos(costo) : null,
+                    string.IsNullOrWhiteSpace(_nuevaPresentacionCodigoBarras) ? null : _nuevaPresentacionCodigoBarras.Trim(),
+                    _nuevaPresentacionStockMinimo == 0 ? null : _nuevaPresentacionStockMinimo),
+                CancellationToken.None);
+            _presentacionesAgregando.Remove(productoId);
+            LimpiarFormularioNuevaPresentacion();
+            await CargarProductos();
+        }
+        catch (ApiException ex)
+        {
+            _agregarPresentacionError = ex.Message;
+        }
+    }
+
+    private void CancelarAgregarPresentacion(Guid productoId)
+    {
+        _presentacionesAgregando.Remove(productoId);
+        LimpiarFormularioNuevaPresentacion();
+    }
+
+    private void ToggleEditarPresentacion(Guid presentacionId, Guid productoId)
+    {
+        if (_presentacionEditando == presentacionId)
+        {
+            _presentacionEditando = null;
+            _editarPresentacionProductoId = null;
+        }
+        else
+        {
+            _presentacionEditando = presentacionId;
+            _editarPresentacionProductoId = productoId;
+            var producto = _productos.FirstOrDefault(p => p.Id == productoId);
+            var presentacion = producto?.Presentaciones.FirstOrDefault(p => p.Id == presentacionId);
+            if (presentacion is not null)
+            {
+                _editarPresentacionNombre = presentacion.Nombre;
+                _editarPresentacionPrecio = Moneda.DeCentavos(presentacion.PrecioVentaCentavos);
+                _editarPresentacionCosto = presentacion.PrecioCostoCentavos.HasValue ? Moneda.DeCentavos(presentacion.PrecioCostoCentavos.Value) : 0;
+                _editarPresentacionCodigoBarras = presentacion.CodigoBarras ?? "";
+                _editarPresentacionStockMinimo = presentacion.StockMinimo ?? 0;
+            }
+        }
+    }
+
+    private void CancelarEditarPresentacion()
+    {
+        _presentacionEditando = null;
+        _editarPresentacionProductoId = null;
+    }
+
+    private async Task GuardarEditarPresentacion(Guid presentacionId, Guid productoId)
+    {
+        try
+        {
+            await Api.EditarPresentacionAsync(
+                presentacionId,
+                new EditarPresentacionRequest(
+                    _editarPresentacionNombre.Trim(),
+                    Moneda.Acentavos(_editarPresentacionPrecio),
+                    _editarPresentacionCosto is { } costo ? Moneda.Acentavos(costo) : null,
+                    string.IsNullOrWhiteSpace(_editarPresentacionCodigoBarras) ? null : _editarPresentacionCodigoBarras.Trim(),
+                    _editarPresentacionStockMinimo == 0 ? null : _editarPresentacionStockMinimo),
+                CancellationToken.None);
+            _presentacionEditando = null;
+            _editarPresentacionProductoId = null;
+            await CargarProductos();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ConfirmarDesactivarPresentacion(Guid presentacionId)
+    {
+        var confirmar = await JSRuntime.InvokeAsync<bool>("confirm", "¿Está seguro de desactivar esta presentación?");
+        if (!confirmar) return;
+        try
+        {
+            await Api.DesactivarPresentacionAsync(presentacionId, CancellationToken.None);
+            await CargarProductos();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ConfirmarDesactivarProducto(Guid productoId)
     {
         var confirmar = await JSRuntime.InvokeAsync<bool>("confirm", "¿Está seguro de desactivar este producto? Esta acción no puede deshacerse.");
         if (!confirmar) return;
@@ -111,7 +348,6 @@ else
     private async Task DesactivarProducto()
     {
         if (_productoAEliminar == null) return;
-
         _error = null;
         try
         {
@@ -124,7 +360,6 @@ else
         }
         finally
         {
-
             _productoAEliminar = null;
         }
     }
@@ -135,7 +370,6 @@ else
         {
             return;
         }
-
         await CargarProductos();
     }
 
@@ -157,7 +391,7 @@ else
         {
             if (ex.EsAutenticacion)
             {
-                Auth.Limpiar();
+                await Auth.LimpiarAsync();
                 Nav.NavigateTo("/login");
             }
             else
