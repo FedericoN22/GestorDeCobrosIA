@@ -65,4 +65,27 @@ public sealed class ProductRepository : IProductRepository
 
     public void AddPresentacion(Presentacion presentacion)
         => _db.Presentaciones.Add(presentacion);
+
+    public async Task EliminarAsync(Guid productoId, CancellationToken cancellationToken = default)
+    {
+        var producto = await _db.Productos
+            .Include(p => p.Presentaciones)
+            .FirstOrDefaultAsync(p => p.Id == productoId, cancellationToken);
+
+        if (producto is not null)
+        {
+            _db.Productos.Remove(producto);
+        }
+    }
+
+    public async Task EliminarPresentacionAsync(Guid presentacionId, CancellationToken cancellationToken = default)
+    {
+        var presentacion = await _db.Presentaciones
+            .FirstOrDefaultAsync(p => p.Id == presentacionId, cancellationToken);
+
+        if (presentacion is not null)
+        {
+            _db.Presentaciones.Remove(presentacion);
+        }
+    }
 }

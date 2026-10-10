@@ -2,7 +2,7 @@
 @inject KioskApiClient Api
 @inject AuthState Auth
 @inject NavigationManager Nav
-@inject IJSRuntime JSRuntime
+@implements IDisposable
 
 @if (!Auth.IsAuthenticated)
 {
@@ -21,6 +21,8 @@
     <div class="alert alert-danger">@_error</div>
 }
 
+<Toast @ref="_toast" />
+
 @if (_cargando)
 {
     <p>Cargando…</p>
@@ -37,10 +39,7 @@ else
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>@producto.Nombre</strong>
                 <span class="text-muted">@NombreCategoria(producto.CategoriaId)</span>
-                @if (producto.Activo)
-                {
-                    <button class="btn btn-sm btn-danger ms-2" @onclick="() => ConfirmarDesactivarProducto(producto.Id)">Desactivar</button>
-                }
+                <button class="btn btn-sm btn-danger ms-2" @onclick="() => IniciarEliminarProducto(producto.Id)">Eliminar</button>
             </div>
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -52,7 +51,7 @@ else
 
                 @if (_presentacionesAgregando.Contains(producto.Id))
                 {
-                    <div class="border rounded p-3 mb-3 bg-light">
+                    <div class="border rounded p-3 mb-3 bg-surface">
                         <h6>Nueva presentación</h6>
                         <div class="mb-2">
                             <label class="form-label">Nombre *</label>
@@ -134,7 +133,7 @@ else
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <button class="btn btn-outline-primary" @onclick="() => ToggleEditarPresentacion(presentacion.Id, producto.Id)" title="Editar">Editar</button>
-                                            <button class="btn btn-outline-danger" @onclick="() => ConfirmarDesactivarPresentacion(presentacion.Id)" title="Eliminar">Eliminar</button>
+                                            <button class="btn btn-outline-danger" @onclick="() => IniciarEliminarPresentacion(presentacion.Id, producto.Id)" title="Eliminar">Eliminar</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -143,7 +142,7 @@ else
                                 {
                                     <tr>
                                         <td colspan="9">
-                                            <div class="border rounded p-3 bg-light">
+                                            <div class="border rounded p-3 bg-surface">
                                                 <h6>Editar presentación</h6>
                                                 <div class="mb-2">
                                                     <label class="form-label">Nombre *</label>
@@ -192,7 +191,9 @@ else
     private Dictionary<Guid, string> _categorias = new();
     private bool _cargando = true;
     private string? _error;
-    private Guid? _productoAEliminar;
+    private Toast? _toast;
+    private readonly Dictionary<Guid, CancellationTokenSource> _eliminacionesPendientes = new();
+    private readonly object _locker = new();
 
     private HashSet<Guid> _presentacionesAgregando = new();
     private string _nuevaPresentacionNombre = "";
@@ -322,45 +323,122 @@ else
         }
     }
 
-    private async Task ConfirmarDesactivarPresentacion(Guid presentacionId)
+    private void IniciarEliminarPresentacion(Guid presentacionId, Guid productoId)
     {
-        var confirmar = await JSRuntime.InvokeAsync<bool>("confirm", "¿Está seguro de desactivar esta presentación?");
-        if (!confirmar) return;
+        var producto = _productos.FirstOrDefault(p => p.Id == productoId);
+        var presentacion = producto?.Presentaciones.FirstOrDefault(p => p.Id == presentacionId);
+        if (producto is null || presentacion is null) return;
+
+        var cts = new CancellationTokenSource();
+        lock (_locker)
+        {
+            _eliminacionesPendientes[presentacionId] = cts;
+        }
+
+        _toast?.Mostrar(
+            $"Presentación '{presentacion.Nombre}' eliminada",
+            "#061E29",
+            puedeDeshacer: true,
+            onDeshacer: () =>
+            {
+                lock (_locker)
+                {
+                    _eliminacionesPendientes.Remove(presentacionId);
+                }
+                cts.Cancel();
+                cts.Dispose();
+            },
+            duracionMs: 5000,
+            mostrarContador: true);
+
+        _ = EjecutarEliminacionPresentacionAsync(presentacionId, cts.Token);
+    }
+
+    private async Task EjecutarEliminacionPresentacionAsync(Guid presentacionId, CancellationToken cancellationToken)
+    {
         try
         {
-            await Api.DesactivarPresentacionAsync(presentacionId, CancellationToken.None);
-            await CargarProductos();
+            await Task.Delay(5000, cancellationToken);
+
+            lock (_locker)
+            {
+                _eliminacionesPendientes.Remove(presentacionId);
+            }
+
+            _error = null;
+            try
+            {
+                await Api.EliminarPresentacionAsync(presentacionId, cancellationToken);
+                await CargarProductos();
+                StateHasChanged();
+            }
+            catch (ApiException ex)
+            {
+                _error = $"Error al eliminar la presentación: {ex.Message}";
+                StateHasChanged();
+            }
         }
-        catch (ApiException ex)
+        catch (TaskCanceledException)
         {
-            _error = ex.Message;
         }
     }
 
-    private async Task ConfirmarDesactivarProducto(Guid productoId)
+    private void IniciarEliminarProducto(Guid productoId)
     {
-        var confirmar = await JSRuntime.InvokeAsync<bool>("confirm", "¿Está seguro de desactivar este producto? Esta acción no puede deshacerse.");
-        if (!confirmar) return;
-        _productoAEliminar = productoId;
-        await DesactivarProducto();
+        var producto = _productos.FirstOrDefault(p => p.Id == productoId);
+        if (producto is null) return;
+
+        var cts = new CancellationTokenSource();
+        lock (_locker)
+        {
+            _eliminacionesPendientes[productoId] = cts;
+        }
+
+        _toast?.Mostrar(
+            $"Producto '{producto.Nombre}' eliminado",
+            "#dc3545",
+            puedeDeshacer: true,
+            onDeshacer: () =>
+            {
+                lock (_locker)
+                {
+                    _eliminacionesPendientes.Remove(productoId);
+                }
+                cts.Cancel();
+                cts.Dispose();
+            },
+            duracionMs: 5000,
+            mostrarContador: true);
+
+        _ = EjecutarEliminarProductoAsync(productoId, cts.Token);
     }
 
-    private async Task DesactivarProducto()
+    private async Task EjecutarEliminarProductoAsync(Guid productoId, CancellationToken cancellationToken)
     {
-        if (_productoAEliminar == null) return;
-        _error = null;
         try
         {
-            await Api.DesactivarProductoAsync(_productoAEliminar.Value, CancellationToken.None);
-            await CargarProductos();
+            await Task.Delay(5000, cancellationToken);
+
+            lock (_locker)
+            {
+                _eliminacionesPendientes.Remove(productoId);
+            }
+
+            _error = null;
+            try
+            {
+                await Api.EliminarProductoAsync(productoId, cancellationToken);
+                await CargarProductos();
+                StateHasChanged();
+            }
+            catch (ApiException ex)
+            {
+                _error = $"Error al eliminar el producto: {ex.Message}";
+                StateHasChanged();
+            }
         }
-        catch (ApiException ex)
+        catch (TaskCanceledException)
         {
-            _error = ex.Message;
-        }
-        finally
-        {
-            _productoAEliminar = null;
         }
     }
 
@@ -402,6 +480,19 @@ else
         finally
         {
             _cargando = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_locker)
+        {
+            foreach (var cts in _eliminacionesPendientes.Values)
+            {
+                cts.Cancel();
+                cts.Dispose();
+            }
+            _eliminacionesPendientes.Clear();
         }
     }
 }

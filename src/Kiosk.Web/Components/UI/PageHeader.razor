@@ -1,0 +1,21 @@
+<div class="page-header">
+    <div class="page-header-text">
+        <h1 class="page-header-title">@Title</h1>
+        @if (Description is not null)
+        {
+            <p class="page-header-description">@Description</p>
+        }
+    </div>
+    @if (ActionFragment is not null)
+    {
+        <div class="page-header-action">
+            @ActionFragment
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? ActionFragment { get; set; }
+}

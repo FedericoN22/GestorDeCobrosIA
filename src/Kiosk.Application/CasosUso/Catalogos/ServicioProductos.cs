@@ -25,6 +25,8 @@ public sealed record EditarProductoCommand(Guid ComercioId, Guid ProductoId, str
 
 public sealed record DesactivarProductoCommand(Guid ComercioId, Guid ProductoId, string Actor, Canal Origen);
 
+public sealed record EliminarProductoCommand(Guid ComercioId, Guid ProductoId, string Actor, Canal Origen);
+
 public sealed record EditarPresentacionCommand(
     Guid ComercioId,
     Guid PresentacionId,
@@ -37,6 +39,8 @@ public sealed record EditarPresentacionCommand(
     Canal Origen);
 
 public sealed record DesactivarPresentacionCommand(Guid ComercioId, Guid PresentacionId, string Actor, Canal Origen);
+
+public sealed record EliminarPresentacionCommand(Guid ComercioId, Guid PresentacionId, string Actor, Canal Origen);
 
 public sealed record CrearProductoResult(Guid ProductoId, Guid? PresentacionId);
 
@@ -177,6 +181,23 @@ public sealed class ServicioProductos
         return Result<ProductoResult>.Ok(ToResult(producto));
     }
 
+    public async Task<Result> EliminarProductoAsync(
+        EliminarProductoCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var producto = await GetProductoAsync(command.ComercioId, command.ProductoId, cancellationToken);
+        if (producto is null)
+        {
+            return Result.Fail(new Error("PRODUCTO_NO_ENCONTRADO", "El producto no existe o no pertenece al comercio."));
+        }
+
+        await _productos.EliminarAsync(command.ProductoId, cancellationToken);
+        AuditoriaRegistrador.Registrar(_auditoria, command.ComercioId, command.Origen, command.Actor, AuditoriaTipos.ProductoEliminado, new { producto.Id, producto.Nombre });
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Result.Ok();
+    }
+
     public async Task<Result<PresentacionResult>> EditarPresentacionAsync(
         EditarPresentacionCommand command,
         CancellationToken cancellationToken = default)
@@ -241,6 +262,30 @@ public sealed class ServicioProductos
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result<PresentacionResult>.Ok(ToResult(presentacion));
+    }
+
+    public async Task<Result> EliminarPresentacionAsync(
+        EliminarPresentacionCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var producto = await _productos.GetByPresentacionIdAsync(command.PresentacionId, cancellationToken);
+        if (producto is null || producto.ComercioId != command.ComercioId)
+        {
+            return Result.Fail(new Error("PRESENTACION_NO_ENCONTRADA", "La presentación no existe o no pertenece al comercio."));
+        }
+
+        var presentacion = producto.Presentaciones.FirstOrDefault(p => p.Id == command.PresentacionId);
+        if (presentacion is null)
+        {
+            return Result.Fail(new Error("PRESENTACION_NO_ENCONTRADA", "La presentación no existe o no pertenece al comercio."));
+        }
+
+        await _productos.EliminarPresentacionAsync(command.PresentacionId, cancellationToken);
+        AuditoriaRegistrador.Registrar(_auditoria, command.ComercioId, command.Origen, command.Actor, AuditoriaTipos.PresentacionEliminada,
+            new { presentacion.Id, NombreProducto = producto.Nombre, presentacion.Nombre });
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Result.Ok();
     }
 
     public async Task<IReadOnlyList<ProductoResult>> ListarAsync(Guid comercioId, CancellationToken cancellationToken = default)

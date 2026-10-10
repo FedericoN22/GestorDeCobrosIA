@@ -12,4 +12,6 @@ public interface IProductRepository
     Task<bool> ExisteCodigoBarrasAsync(Guid comercioId, string codigoBarras, Guid? excluirPresentacionId = null, CancellationToken cancellationToken = default);
     void Add(Producto producto);
     void AddPresentacion(Presentacion presentacion);
+    Task EliminarAsync(Guid productoId, CancellationToken cancellationToken = default);
+    Task EliminarPresentacionAsync(Guid presentacionId, CancellationToken cancellationToken = default);
 }

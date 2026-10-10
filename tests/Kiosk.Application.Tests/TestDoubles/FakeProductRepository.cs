@@ -54,4 +54,24 @@ public sealed class FakeProductRepository : IProductRepository
 
     public void AddPresentacion(Presentacion presentacion)
         => _presentaciones.Add(presentacion);
+
+    public Task EliminarAsync(Guid productoId, CancellationToken cancellationToken = default)
+    {
+        var producto = _productos.FirstOrDefault(p => p.Id == productoId);
+        if (producto is not null)
+        {
+            _productos.Remove(producto);
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task EliminarPresentacionAsync(Guid presentacionId, CancellationToken cancellationToken = default)
+    {
+        var presentacion = _presentaciones.FirstOrDefault(p => p.Id == presentacionId);
+        if (presentacion is not null)
+        {
+            _presentaciones.Remove(presentacion);
+        }
+        return Task.CompletedTask;
+    }
 }

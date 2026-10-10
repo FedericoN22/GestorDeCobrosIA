@@ -73,10 +73,18 @@ public sealed class KioskApiClient
         return await LeerAsync<PresentacionResponse>(respuesta, cancellationToken);
     }
 
-    public async Task<PresentacionResponse> DesactivarPresentacionAsync(Guid presentacionId, CancellationToken cancellationToken)
+    public async Task EliminarPresentacionAsync(Guid presentacionId, CancellationToken cancellationToken)
     {
         using var respuesta = await EnviarAsync(() => _http.DeleteAsync($"api/productos/presentaciones/{presentacionId}", cancellationToken));
-        return await LeerAsync<PresentacionResponse>(respuesta, cancellationToken);
+        if (!respuesta.IsSuccessStatusCode)
+        {
+            var error = await TryLeerErrorAsync(respuesta, cancellationToken);
+            var esAutenticacion = respuesta.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
+            throw new ApiException(
+                error?.Message ?? $"La API respondió {(int)respuesta.StatusCode}.",
+                error?.Error,
+                esAutenticacion);
+        }
     }
 
     public async Task<StockActualResponse> EntradaStockAsync(Guid presentacionId, int cantidad, int? precioCostoCentavos, CancellationToken cancellationToken)
@@ -164,12 +172,18 @@ public sealed class KioskApiClient
         return await LeerAsync<WhatsappWhitelistResponse>(respuesta, cancellationToken);
     }
 
-    // ---
-    // NUEVO: Desactivar producto
-    public async Task<ProductoResponse> DesactivarProductoAsync(Guid productoId, CancellationToken cancellationToken)
+    public async Task EliminarProductoAsync(Guid productoId, CancellationToken cancellationToken)
     {
         using var respuesta = await EnviarAsync(() => _http.DeleteAsync($"api/productos/{productoId}", cancellationToken));
-        return await LeerAsync<ProductoResponse>(respuesta, cancellationToken);
+        if (!respuesta.IsSuccessStatusCode)
+        {
+            var error = await TryLeerErrorAsync(respuesta, cancellationToken);
+            var esAutenticacion = respuesta.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
+            throw new ApiException(
+                error?.Message ?? $"La API respondió {(int)respuesta.StatusCode}.",
+                error?.Error,
+                esAutenticacion);
+        }
     }
 
     public async Task<ConfiguracionBotResponse> GetConfiguracionBotAsync(CancellationToken cancellationToken)

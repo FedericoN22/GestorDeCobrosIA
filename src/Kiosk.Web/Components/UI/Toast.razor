@@ -1,0 +1,130 @@
+@implements IDisposable
+
+<div class="toast-container position-fixed top-50 start-50 translate-middle p-3" style="z-index: 1055;">
+    @foreach (var toast in _toasts)
+    {
+        <div class="toast show align-items-center border-0 mb-2" style="background-color: @toast.Color; color: white;" role="alert" aria-live="assertive">
+            <div class="d-flex">
+                <div class="toast-body">
+                    @toast.Mensaje
+                    @if (toast.PuedeDeshacer)
+                    {
+                        <button type="button" class="btn btn-sm btn-link p-0 ms-2 text-white text-decoration-underline" @onclick="() => Deshacer(toast.Id)">
+                            Deshacer
+                        </button>
+                    }
+                    @if (toast.MostrarContador)
+                    {
+                        <span class="ms-2 badge bg-dark text-white">@toast.SegundosRestantes</span>
+                    }
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" @onclick="() => Cerrar(toast.Id)" aria-label="Cerrar"></button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly List<ToastItem> _toasts = new();
+    private readonly Dictionary<Guid, CancellationTokenSource> _canceladores = new();
+    private readonly object _locker = new();
+
+    public Guid Mostrar(string mensaje, string color = "#0d6efd", bool puedeDeshacer = false, Action? onDeshacer = null, int duracionMs = 5000, bool mostrarContador = false)
+    {
+        var id = Guid.NewGuid();
+        var cts = new CancellationTokenSource();
+        var segundosRestantes = duracionMs / 1000;
+
+        lock (_locker)
+        {
+            _toasts.Add(new ToastItem(id, mensaje, color, puedeDeshacer, onDeshacer, mostrarContador, segundosRestantes));
+            if (puedeDeshacer)
+            {
+                _canceladores[id] = cts;
+            }
+        }
+
+        StateHasChanged();
+        _ = ContadorYCerrarAsync(id, segundosRestantes, cts.Token);
+        return id;
+    }
+
+    public void Deshacer(Guid id)
+    {
+        CancellationTokenSource? cts = null;
+        ToastItem? toast = null;
+
+        lock (_locker)
+        {
+            if (_canceladores.Remove(id, out cts))
+            {
+                toast = _toasts.FirstOrDefault(t => t.Id == id);
+                _toasts.RemoveAll(t => t.Id == id);
+            }
+        }
+
+        cts?.Cancel();
+        cts?.Dispose();
+        toast?.OnDeshacer?.Invoke();
+        StateHasChanged();
+    }
+
+    public void Cerrar(Guid id)
+    {
+        CancellationTokenSource? cts = null;
+
+        lock (_locker)
+        {
+            if (_canceladores.Remove(id, out cts))
+            {
+                _toasts.RemoveAll(t => t.Id == id);
+            }
+        }
+
+        cts?.Dispose();
+        StateHasChanged();
+    }
+
+    private async Task ContadorYCerrarAsync(Guid id, int segundos, CancellationToken cancellationToken)
+    {
+        try
+        {
+            for (var i = segundos; i > 0; i--)
+            {
+                await Task.Delay(1000, cancellationToken);
+
+                lock (_locker)
+                {
+                    var toast = _toasts.FirstOrDefault(t => t.Id == id);
+                    if (toast is not null)
+                    {
+                        _toasts.RemoveAll(t => t.Id == id);
+                        _toasts.Add(toast with { SegundosRestantes = i - 1 });
+                    }
+                }
+                StateHasChanged();
+            }
+
+            Cerrar(id);
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_locker)
+        {
+            foreach (var cts in _canceladores.Values)
+            {
+                cts.Cancel();
+                cts.Dispose();
+            }
+            _canceladores.Clear();
+            _toasts.Clear();
+        }
+    }
+
+    private sealed record ToastItem(Guid Id, string Mensaje, string Color, bool PuedeDeshacer, Action? OnDeshacer, bool MostrarContador, int SegundosRestantes);
+}

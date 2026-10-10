@@ -8,9 +8,11 @@ public static class AuditoriaTipos
     public const string ProductoCreado = "PRODUCTO_CREADO";
     public const string ProductoEditado = "PRODUCTO_EDITADO";
     public const string ProductoDesactivado = "PRODUCTO_DESACTIVADO";
+    public const string ProductoEliminado = "PRODUCTO_ELIMINADO";
     public const string PresentacionCreada = "PRESENTACION_CREADA";
     public const string PresentacionEditada = "PRESENTACION_EDITADA";
     public const string PresentacionDesactivada = "PRESENTACION_DESACTIVADA";
+    public const string PresentacionEliminada = "PRESENTACION_ELIMINADA";
     public const string EntradaManual = "ENTRADA_MANUAL";
     public const string AjusteStock = "AJUSTE_STOCK";
     public const string StockMinimoConfigurado = "STOCK_MINIMO_CONFIGURADO";

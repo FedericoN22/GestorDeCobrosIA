@@ -82,19 +82,19 @@ public sealed class ProductosController : ApiControllerBase
 
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = Permisos.ProductosGestionar)]
-    public async Task<ActionResult<ProductoResponse>> Desactivar(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult> Eliminar(Guid id, CancellationToken cancellationToken)
     {
         if (ComercioId is not Guid comercioId || Username is null)
         {
             return Unauthorized();
         }
 
-        var resultado = await _servicio.DesactivarProductoAsync(
-            new DesactivarProductoCommand(comercioId, id, Username, Canal),
+        var resultado = await _servicio.EliminarProductoAsync(
+            new EliminarProductoCommand(comercioId, id, Username, Canal),
             cancellationToken);
 
         return resultado.IsSuccess
-            ? Ok(ToResponse(resultado.Value!))
+            ? NoContent()
             : ErrorResponse(resultado.Error!);
     }
 
@@ -161,19 +161,19 @@ public sealed class ProductosController : ApiControllerBase
 
     [HttpDelete("presentaciones/{presentacionId:guid}")]
     [Authorize(Policy = Permisos.ProductosGestionar)]
-    public async Task<ActionResult<PresentacionResponse>> DesactivarPresentacion(Guid presentacionId, CancellationToken cancellationToken)
+    public async Task<ActionResult> EliminarPresentacion(Guid presentacionId, CancellationToken cancellationToken)
     {
         if (ComercioId is not Guid comercioId || Username is null)
         {
             return Unauthorized();
         }
 
-        var resultado = await _servicio.DesactivarPresentacionAsync(
-            new DesactivarPresentacionCommand(comercioId, presentacionId, Username, Canal),
+        var resultado = await _servicio.EliminarPresentacionAsync(
+            new EliminarPresentacionCommand(comercioId, presentacionId, Username, Canal),
             cancellationToken);
 
         return resultado.IsSuccess
-            ? Ok(ToResponse(resultado.Value!))
+            ? NoContent()
             : ErrorResponse(resultado.Error!);
     }
 
