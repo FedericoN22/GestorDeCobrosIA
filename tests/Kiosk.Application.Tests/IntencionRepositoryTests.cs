@@ -81,6 +81,7 @@ public class IntencionRepositoryTests : IDisposable
 
         var repo = new IntencionRepository(CrearContexto());
         var pendiente = await repo.GetPendienteAsync(_comercioB, Canal.WHATSAPP, Numero);
+        Assert.NotNull(pendiente);
         Assert.Equal("mensaje del comercio B", pendiente.TextoOriginal);
         Assert.NotEqual(intencionA.Id, pendiente.Id);
     }
