@@ -21,3 +21,6 @@ nul
 # Scratch / experimentos temporales
 .scratch-repro/
 login.json
+
+# Carpetas de trabajo de fases de mejora del ChatBot IA
+FasesMejoraChatBOTIA/
