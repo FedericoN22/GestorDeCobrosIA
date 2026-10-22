@@ -26,6 +26,7 @@ public static class AuditoriaTipos
     public const string IntencionCancelada = "INTENCION_CANCELADA";
     public const string IntencionRechazada = "INTENCION_RECHAZADA";
     public const string IntencionError = "INTENCION_ERROR";
+    public const string IntencionReconciliada = "INTENCION_RECONCILIADA";
     public const string WhitelistAgregada = "WHITELIST_AGREGADA";
     public const string WhitelistQuitada = "WHITELIST_QUITADA";
     public const string ConfiguracionBotGuardada = "CONFIGURACION_BOT_GUARDADA";

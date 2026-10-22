@@ -31,6 +31,55 @@ public sealed class IntencionRepository : IIntencionRepository
             .OrderByDescending(i => i.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Intencion>> GetEjecutandoAsync(
+        Guid comercioId,
+        Canal canal,
+        string canalUsuarioId,
+        CancellationToken cancellationToken = default)
+        => await _db.Intenciones
+            .Where(i => i.ComercioId == comercioId && i.Canal == canal && i.CanalUsuarioId == canalUsuarioId && i.Estado == EstadoIntencion.EJECUTANDO)
+            .OrderByDescending(i => i.UpdatedAt)
+            .ToListAsync(cancellationToken);
+
+    public async Task<ResultadoReclamo> TryReclamarAsync(
+        Guid id,
+        Guid comercioId,
+        Canal canal,
+        string canalUsuarioId,
+        CancellationToken cancellationToken = default)
+    {
+        var ahora = DateTime.UtcNow;
+
+        var filasAfectadas = await _db.Intenciones
+            .Where(i => i.Id == id
+                && i.ComercioId == comercioId
+                && i.Canal == canal
+                && i.CanalUsuarioId == canalUsuarioId
+                && i.Estado == EstadoIntencion.ESPERANDO_CONFIRMACION)
+            .ExecuteUpdateAsync(
+                s => s
+                    .SetProperty(i => i.Estado, EstadoIntencion.EJECUTANDO)
+                    .SetProperty(i => i.UpdatedAt, ahora),
+                cancellationToken);
+
+        if (filasAfectadas == 1)
+        {
+            return ResultadoReclamo.Reclamado;
+        }
+
+        var estadoActual = await _db.Intenciones
+            .Where(i => i.Id == id)
+            .Select(i => (EstadoIntencion?)i.Estado)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return estadoActual switch
+        {
+            EstadoIntencion.EJECUTANDO => ResultadoReclamo.EnEjecucion,
+            EstadoIntencion.EJECUTADA => ResultadoReclamo.YaAplicada,
+            _ => ResultadoReclamo.NoResuelta
+        };
+    }
+
     public void Add(Intencion intencion)
         => _db.Intenciones.Add(intencion);
 }

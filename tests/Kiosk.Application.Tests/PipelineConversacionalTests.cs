@@ -29,9 +29,10 @@ public class PipelineConversacionalTests
             var productos = new ServicioProductos(Productos, Categorias, Auditoria, Uow);
             Resolvedor = new ResolvedorCatalogos(Productos);
             Ejecutor = new EjecutorAcciones(stock, productos, Resolvedor, Ledger);
+            Verificador = new VerificadorEfectoAplicado(Resolvedor);
 
             Pipeline = new PipelineConversacional(
-                Intenciones, Uow, Config, Auditoria, Parser, Resolvedor, Ejecutor, Ledger);
+                Intenciones, Uow, Config, Auditoria, Parser, Resolvedor, Ejecutor, Verificador, Ledger);
         }
 
         public FakeIntencionRepository Intenciones { get; } = new();
@@ -44,6 +45,7 @@ public class PipelineConversacionalTests
         public FakeStockLedger Ledger { get; } = new();
         public ResolvedorCatalogos Resolvedor { get; }
         public EjecutorAcciones Ejecutor { get; }
+        public VerificadorEfectoAplicado Verificador { get; }
         public PipelineConversacional Pipeline { get; }
     }
 
@@ -114,6 +116,22 @@ public class PipelineConversacionalTests
         pendiente.PedirConfirmacion(expiraEn ?? DateTime.UtcNow.AddMinutes(5));
         ctx.Intenciones.Seed(pendiente);
         return pendiente;
+    }
+
+    private static Intencion SeedIntencionEjecutando(
+        Contexto ctx,
+        AccionIntencion accion,
+        string producto,
+        string presentacion,
+        int? precio = null)
+    {
+        var comando = Comando(accion, 0.95m, producto, presentacion, null, precio);
+        var intencion = Intencion.Recibir(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "mensaje original");
+        intencion.MarcarParseada(JsonSerializer.Serialize(comando));
+        intencion.PedirConfirmacion(DateTime.UtcNow.AddMinutes(5));
+        intencion.MarcarEjecutando();
+        ctx.Intenciones.Seed(intencion);
+        return intencion;
     }
 
     [Fact]
@@ -349,6 +367,123 @@ public class PipelineConversacionalTests
     }
 
     [Fact]
+    public async Task IntencionEjecutandoReciente_NoSeReconciliaYRespondeQueEstaEnProceso()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        var ejecutando = SeedIntencionEjecutando(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.OperacionEnProceso, respuesta);
+        Assert.Equal(EstadoIntencion.EJECUTANDO, ejecutando.Estado);
+        Assert.True(presentacion.Activa);
+        Assert.Empty(ctx.Parser.Llamadas);
+    }
+
+    [Fact]
+    public async Task IntencionEjecutandoVencida_ConEfectoYaAplicado_ReconciliaAExecutada()
+    {
+        var ctx = new Contexto();
+        ctx.Config.Set(ComercioId, ClavesConfiguracion.BotTimeoutEjecucionSegundos, "0");
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        var ejecutando = SeedIntencionEjecutando(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
+        presentacion.Desactivar();
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.OperacionReconciliadaAplicada, respuesta);
+        Assert.Equal(EstadoIntencion.EJECUTADA, ejecutando.Estado);
+        Assert.Contains(ctx.Auditoria.Eventos, e => e.Tipo == AuditoriaTipos.IntencionReconciliada);
+        Assert.Empty(ctx.Parser.Llamadas);
+    }
+
+    [Fact]
+    public async Task IntencionEjecutandoVencida_ConPrecioYaAplicado_ReconciliaAExecutada()
+    {
+        var ctx = new Contexto();
+        ctx.Config.Set(ComercioId, ClavesConfiguracion.BotTimeoutEjecucionSegundos, "0");
+        SeedProducto(ctx, "Coca Cola", "1.5L");
+        var ejecutando = SeedIntencionEjecutando(ctx, AccionIntencion.MODIFICAR_PRECIO, "COCA COLA", "1.5L", precio: 15);
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.OperacionReconciliadaAplicada, respuesta);
+        Assert.Equal(EstadoIntencion.EJECUTADA, ejecutando.Estado);
+    }
+
+    [Fact]
+    public async Task IntencionEjecutandoVencida_SinEfectoVerificable_QuedaEnErrorYNoReEjecuta()
+    {
+        var ctx = new Contexto();
+        ctx.Config.Set(ComercioId, ClavesConfiguracion.BotTimeoutEjecucionSegundos, "0");
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        var ejecutando = SeedIntencionEjecutando(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.OperacionReconciliadaNoVerificable, respuesta);
+        Assert.Equal(EstadoIntencion.ERROR, ejecutando.Estado);
+        Assert.True(presentacion.Activa);
+        Assert.Contains(ctx.Auditoria.Eventos, e => e.Tipo == AuditoriaTipos.IntencionReconciliada);
+        Assert.Empty(ctx.Parser.Llamadas);
+    }
+
+    [Fact]
+    public async Task IntencionEjecutandoVencida_NuncaVuelveAEsperandoConfirmacion()
+    {
+        var ctx = new Contexto();
+        ctx.Config.Set(ComercioId, ClavesConfiguracion.BotTimeoutEjecucionSegundos, "0");
+        SeedProducto(ctx, "Coca Cola", "1.5L");
+        var ejecutando = SeedIntencionEjecutando(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
+
+        await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.NotEqual(EstadoIntencion.ESPERANDO_CONFIRMACION, ejecutando.Estado);
+    }
+
+    [Fact]
+    public async Task FallaDePersistenciaTrasElClaim_LaIntencionQuedaEjecutandoYNoSeReEjecutaEnElMensajeSiguiente()
+    {
+        var ctx = new Contexto();
+        SeedProducto(ctx, "Coca Cola", "1.5L");
+        var pendiente = SeedConfirmacionPendiente(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
+
+        ctx.Uow.LanzarError = true;
+        var primera = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.Error, primera);
+        Assert.Equal(EstadoIntencion.EJECUTANDO, pendiente.Estado);
+
+        ctx.Uow.LanzarError = false;
+        ctx.Config.Set(ComercioId, ClavesConfiguracion.BotTimeoutEjecucionSegundos, "0");
+
+        var segunda = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.NotEqual(EstadoIntencion.ESPERANDO_CONFIRMACION, pendiente.Estado);
+        Assert.NotEqual(EstadoIntencion.EJECUTANDO, pendiente.Estado);
+        Assert.Single(ctx.Auditoria.Eventos, e => e.Tipo == AuditoriaTipos.PresentacionDesactivada);
+        Assert.Empty(ctx.Parser.Llamadas);
+    }
+
+    [Fact]
+    public async Task ConfirmacionSi_AplicaElEfectoMientrasLaIntencionEstaEjecutando_YLaMarcaEjecutadaDespues()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 5, null, Canal.WEB));
+        var pendiente = SeedConfirmacionPendiente(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
+
+        var estadosAlGuardar = new List<EstadoIntencion>();
+        ctx.Uow.AlGuardar = () => estadosAlGuardar.Add(pendiente.Estado);
+
+        await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal([EstadoIntencion.EJECUTANDO, EstadoIntencion.EJECUTADA], estadosAlGuardar);
+        Assert.False(presentacion.Activa);
+    }
+
+    [Fact]
     public async Task ExcepcionEnParser_MarcaIntencionComoErrorYRespondeError()
     {
         var ctx = new Contexto();
@@ -464,6 +599,50 @@ public class PipelineConversacionalTests
 
         public Task<Kiosk.Domain.Whatsapp.Intencion?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
             => Task.FromResult<Kiosk.Domain.Whatsapp.Intencion?>(_db.Intenciones.FirstOrDefault(i => i.Id == id));
+
+        public Task<IReadOnlyList<Kiosk.Domain.Whatsapp.Intencion>> GetEjecutandoAsync(
+            Guid comercioId,
+            Canal canal,
+            string canalUsuarioId,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<Kiosk.Domain.Whatsapp.Intencion>>(_db.Intenciones
+                .Where(i => i.ComercioId == comercioId
+                            && i.Canal == canal
+                            && i.CanalUsuarioId == canalUsuarioId
+                            && i.Estado == EstadoIntencion.EJECUTANDO)
+                .OrderByDescending(i => i.UpdatedAt)
+                .ToList());
+
+        public Task<Kiosk.Application.Puertos.Repositorios.ResultadoReclamo> TryReclamarAsync(
+            Guid id,
+            Guid comercioId,
+            Canal canal,
+            string canalUsuarioId,
+            CancellationToken cancellationToken = default)
+        {
+            var intencion = _db.Intenciones.FirstOrDefault(i => i.Id == id);
+
+            if (intencion is null
+                || intencion.ComercioId != comercioId
+                || intencion.Canal != canal
+                || intencion.CanalUsuarioId != canalUsuarioId)
+            {
+                return Task.FromResult(Kiosk.Application.Puertos.Repositorios.ResultadoReclamo.NoResuelta);
+            }
+
+            if (intencion.Estado == EstadoIntencion.ESPERANDO_CONFIRMACION)
+            {
+                intencion.MarcarEjecutando();
+                return Task.FromResult(Kiosk.Application.Puertos.Repositorios.ResultadoReclamo.Reclamado);
+            }
+
+            return Task.FromResult(intencion.Estado switch
+            {
+                EstadoIntencion.EJECUTANDO => Kiosk.Application.Puertos.Repositorios.ResultadoReclamo.EnEjecucion,
+                EstadoIntencion.EJECUTADA => Kiosk.Application.Puertos.Repositorios.ResultadoReclamo.YaAplicada,
+                _ => Kiosk.Application.Puertos.Repositorios.ResultadoReclamo.NoResuelta
+            });
+        }
 
         public void Add(Kiosk.Domain.Whatsapp.Intencion intencion)
             => _db.Intenciones.Add(intencion);

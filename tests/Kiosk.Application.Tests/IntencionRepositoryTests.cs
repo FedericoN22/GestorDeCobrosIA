@@ -1,3 +1,4 @@
+using Kiosk.Application.Puertos.Repositorios;
 using Kiosk.Domain.Common;
 using Kiosk.Domain.Comercios;
 using Kiosk.Domain.Whatsapp;
@@ -56,6 +57,13 @@ public class IntencionRepositoryTests : IDisposable
         return intencion;
     }
 
+    private static Intencion CrearEjecutando(Guid comercioId, string texto)
+    {
+        var intencion = CrearPendiente(comercioId, texto);
+        intencion.MarcarEjecutando();
+        return intencion;
+    }
+
     [Fact]
     public async Task MismoNumero_DistintoComercio_ComercioADevuelveSoloSuIntencion()
     {
@@ -108,5 +116,125 @@ public class IntencionRepositoryTests : IDisposable
         var pendiente = await repo.GetPendienteAsync(_comercioB, Canal.WHATSAPP, Numero);
 
         Assert.Null(pendiente);
+    }
+
+    [Fact]
+    public async Task TryReclamarAsync_SobrePendiente_ReclamaYPasaAEjecutando()
+    {
+        var intencion = CrearPendiente(_comercioA, "mensaje del comercio A");
+        SeedIntenciones(intencion);
+
+        var repo = new IntencionRepository(CrearContexto());
+        var resultado = await repo.TryReclamarAsync(intencion.Id, _comercioA, Canal.WHATSAPP, Numero);
+
+        Assert.Equal(ResultadoReclamo.Reclamado, resultado);
+
+        using var db = CrearContexto();
+        var guardada = await db.Intenciones.FirstAsync(i => i.Id == intencion.Id);
+        Assert.Equal(EstadoIntencion.EJECUTANDO, guardada.Estado);
+    }
+
+    [Fact]
+    public async Task TryReclamarAsync_SobreYaReclamada_NoReclamaYDevuelveEnEjecucion()
+    {
+        var intencion = CrearEjecutando(_comercioA, "mensaje del comercio A");
+        SeedIntenciones(intencion);
+
+        var repo = new IntencionRepository(CrearContexto());
+        var resultado = await repo.TryReclamarAsync(intencion.Id, _comercioA, Canal.WHATSAPP, Numero);
+
+        Assert.Equal(ResultadoReclamo.EnEjecucion, resultado);
+    }
+
+    [Fact]
+    public async Task TryReclamarAsync_SobreYaEjecutada_DevuelveYaAplicada()
+    {
+        var intencion = CrearPendiente(_comercioA, "mensaje del comercio A");
+        intencion.Ejecutar("{\"respuesta\":\"listo\"}");
+        SeedIntenciones(intencion);
+
+        var repo = new IntencionRepository(CrearContexto());
+        var resultado = await repo.TryReclamarAsync(intencion.Id, _comercioA, Canal.WHATSAPP, Numero);
+
+        Assert.Equal(ResultadoReclamo.YaAplicada, resultado);
+    }
+
+    [Fact]
+    public async Task TryReclamarAsync_DeOtroComercio_NoReclama()
+    {
+        var intencion = CrearPendiente(_comercioA, "mensaje del comercio A");
+        SeedIntenciones(intencion);
+
+        var repo = new IntencionRepository(CrearContexto());
+        var resultado = await repo.TryReclamarAsync(intencion.Id, _comercioB, Canal.WHATSAPP, Numero);
+
+        Assert.Equal(ResultadoReclamo.NoResuelta, resultado);
+    }
+
+    [Fact]
+    public async Task TryReclamarAsync_DeOtroCanal_NoReclama()
+    {
+        var intencion = CrearPendiente(_comercioA, "mensaje del comercio A");
+        SeedIntenciones(intencion);
+
+        var repo = new IntencionRepository(CrearContexto());
+        var resultado = await repo.TryReclamarAsync(intencion.Id, _comercioA, Canal.WEB, Numero);
+
+        Assert.Equal(ResultadoReclamo.NoResuelta, resultado);
+    }
+
+    [Fact]
+    public async Task TryReclamarAsync_DeOtroUsuario_NoReclama()
+    {
+        var intencion = CrearPendiente(_comercioA, "mensaje del comercio A");
+        SeedIntenciones(intencion);
+
+        var repo = new IntencionRepository(CrearContexto());
+        var resultado = await repo.TryReclamarAsync(intencion.Id, _comercioA, Canal.WHATSAPP, "5491222222222");
+
+        Assert.Equal(ResultadoReclamo.NoResuelta, resultado);
+    }
+
+    [Fact]
+    public async Task DosClaimsSobreLaMismaIntencion_SoloUnoGana()
+    {
+        var intencion = CrearPendiente(_comercioA, "mensaje del comercio A");
+        SeedIntenciones(intencion);
+
+        var primerRepo = new IntencionRepository(CrearContexto());
+        var segundoRepo = new IntencionRepository(CrearContexto());
+
+        var primero = await primerRepo.TryReclamarAsync(intencion.Id, _comercioA, Canal.WHATSAPP, Numero);
+        var segundo = await segundoRepo.TryReclamarAsync(intencion.Id, _comercioA, Canal.WHATSAPP, Numero);
+
+        Assert.Equal(ResultadoReclamo.Reclamado, primero);
+        Assert.Equal(ResultadoReclamo.EnEjecucion, segundo);
+    }
+
+    [Fact]
+    public async Task GetEjecutandoAsync_DevuelveSoloLasIntencionesEjecutandoDelDueno()
+    {
+        var ejecutandoA = CrearEjecutando(_comercioA, "ejecutando del comercio A");
+        var pendienteA = CrearPendiente(_comercioA, "pendiente del comercio A");
+        var ejecutandoDeOtroComercio = CrearEjecutando(_comercioB, "ejecutando del comercio B");
+        SeedIntenciones(ejecutandoA, pendienteA, ejecutandoDeOtroComercio);
+
+        var repo = new IntencionRepository(CrearContexto());
+        var encontradas = await repo.GetEjecutandoAsync(_comercioA, Canal.WHATSAPP, Numero);
+
+        var unica = Assert.Single(encontradas);
+        Assert.Equal(ejecutandoA.Id, unica.Id);
+    }
+
+    [Fact]
+    public async Task GetEjecutandoAsync_NoDevuelveLasPendientes()
+    {
+        var pendiente = CrearPendiente(_comercioA, "pendiente del comercio A");
+        SeedIntenciones(pendiente);
+
+        var repo = new IntencionRepository(CrearContexto());
+        var encontradas = await repo.GetEjecutandoAsync(_comercioA, Canal.WHATSAPP, Numero);
+
+        Assert.Empty(encontradas);
     }
 }

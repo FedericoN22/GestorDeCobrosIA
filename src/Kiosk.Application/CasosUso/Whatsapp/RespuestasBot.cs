@@ -23,6 +23,21 @@ public static class RespuestasBot
     public const string TimeoutExpirado =
         "El tiempo para confirmar la operación anterior expiró, así que quedó cancelada. Enviá de nuevo tu pedido si todavía lo querés hacer.";
 
+    public const string OperacionEnProceso =
+        "Esa operación se está aplicando ahora. Esperá un momento y volvé a preguntarme.";
+
+    public const string OperacionYaAplicada =
+        "Esa operación ya se había aplicado.";
+
+    public const string OperacionNoResuelta =
+        "Esa operación no llegó a completarse. Volvé a pedirla si la necesitás.";
+
+    public const string OperacionReconciliadaAplicada =
+        "Tu operación anterior sí se aplicó. No la repitas.";
+
+    public const string OperacionReconciliadaNoVerificable =
+        "No pude verificar si tu operación anterior se aplicó. Revisá el catálogo antes de volver a pedirla.";
+
     public static string Ayuda(string botNombre) =>
         $"Hola 👋 Soy {botNombre}. Puedo ayudarte con:\n" +
         "• \"¿Cuánto stock hay de [producto]?\"\n" +

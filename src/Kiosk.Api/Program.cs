@@ -138,6 +138,7 @@ builder.Services.AddScoped<IWhatsAppMediaDownloader, MetaMediaDownloader>();
 
 builder.Services.AddSingleton<RateLimiterWhatsApp>();
 builder.Services.AddScoped<ResolvedorCatalogos>();
+builder.Services.AddScoped<VerificadorEfectoAplicado>();
 builder.Services.AddScoped<EjecutorAcciones>();
 builder.Services.AddScoped<PipelineConversacional>();
 builder.Services.AddScoped<ServicioChat>();

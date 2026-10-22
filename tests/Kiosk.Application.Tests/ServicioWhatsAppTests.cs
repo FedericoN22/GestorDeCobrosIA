@@ -30,9 +30,10 @@ public class ServicioWhatsAppTests
             var productos = new ServicioProductos(Productos, Categorias, Auditoria, Uow);
             var resolvedor = new ResolvedorCatalogos(Productos);
             var ejecutor = new EjecutorAcciones(stock, productos, resolvedor, Ledger);
+            var verificador = new VerificadorEfectoAplicado(resolvedor);
 
             var pipeline = new PipelineConversacional(
-                Intenciones, Uow, Config, Auditoria, Parser, resolvedor, ejecutor, Ledger);
+                Intenciones, Uow, Config, Auditoria, Parser, resolvedor, ejecutor, verificador, Ledger);
 
             Servicio = new ServicioWhatsApp(
                 Whitelist, Config, Sender, pipeline, new RateLimiterWhatsApp());

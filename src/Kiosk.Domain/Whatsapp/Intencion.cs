@@ -11,7 +11,8 @@ public enum EstadoIntencion
     EJECUTADA = 5,
     CANCELADA = 6,
     RECHAZADA = 7,
-    ERROR = 8
+    ERROR = 8,
+    EJECUTANDO = 9
 }
 
 public class Intencion
@@ -104,7 +105,10 @@ public class Intencion
 
     public void Ejecutar(string resultadoJson)
     {
-        if (Estado != EstadoIntencion.ESPERANDO_CONFIRMACION && Estado != EstadoIntencion.ACLARACION && Estado != EstadoIntencion.PARSEADA)
+        if (Estado is not (EstadoIntencion.ESPERANDO_CONFIRMACION
+            or EstadoIntencion.ACLARACION
+            or EstadoIntencion.PARSEADA
+            or EstadoIntencion.EJECUTANDO))
         {
             throw new DomainException("INTENCION_ESTADO_INVALIDO", "La intención no está en un estado que permita ejecutarla.");
         }
@@ -112,6 +116,22 @@ public class Intencion
         Estado = EstadoIntencion.EJECUTADA;
         ResultadoJson = resultadoJson;
         ExpiraEn = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void MarcarEjecutando()
+    {
+        if (Estado == EstadoIntencion.EJECUTANDO)
+        {
+            return;
+        }
+
+        if (Estado != EstadoIntencion.ESPERANDO_CONFIRMACION)
+        {
+            throw new DomainException("INTENCION_ESTADO_INVALIDO", "Solo una intención esperando confirmación puede pasar a ejecutándose.");
+        }
+
+        Estado = EstadoIntencion.EJECUTANDO;
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -142,5 +162,10 @@ public class Intencion
     public bool ConfirmacionExpirada(DateTime ahora)
     {
         return Estado == EstadoIntencion.ESPERANDO_CONFIRMACION && ExpiraEn is not null && ExpiraEn <= ahora;
+    }
+
+    public bool EjecucionVencida(DateTime ahora, TimeSpan timeout)
+    {
+        return Estado == EstadoIntencion.EJECUTANDO && UpdatedAt <= ahora - timeout;
     }
 }

@@ -181,4 +181,75 @@ public class IntencionTests
         Assert.True(intencion.ConfirmacionExpirada(DateTime.UtcNow.AddMinutes(3)));
         Assert.False(intencion.ConfirmacionExpirada(DateTime.UtcNow.AddMinutes(1)));
     }
+
+    [Fact]
+    public void MarcarEjecutando_DesdeEsperandoConfirmacion_CambiaEstado()
+    {
+        var intencion = Recibir();
+        intencion.MarcarParseada("{\"accion\":\"ELIMINAR_PRODUCTO\"}");
+        intencion.PedirConfirmacion(DateTime.UtcNow.AddMinutes(2));
+
+        intencion.MarcarEjecutando();
+
+        Assert.Equal(EstadoIntencion.EJECUTANDO, intencion.Estado);
+    }
+
+    [Fact]
+    public void MarcarEjecutando_SoloDesdeEsperandoConfirmacion()
+    {
+        var intencion = Recibir();
+
+        AssertHelper.ThrowsDomain(
+            "INTENCION_ESTADO_INVALIDO",
+            () => intencion.MarcarEjecutando());
+    }
+
+    [Fact]
+    public void MarcarEjecutando_CuandoYaEstaEjecutando_NoCambiaNada()
+    {
+        var intencion = Recibir();
+        intencion.MarcarParseada("{\"accion\":\"ELIMINAR_PRODUCTO\"}");
+        intencion.PedirConfirmacion(DateTime.UtcNow.AddMinutes(2));
+        intencion.MarcarEjecutando();
+
+        intencion.MarcarEjecutando();
+
+        Assert.Equal(EstadoIntencion.EJECUTANDO, intencion.Estado);
+    }
+
+    [Fact]
+    public void Ejecutar_DesdeEjecutando_CambiaEstado()
+    {
+        var intencion = Recibir();
+        intencion.MarcarParseada("{\"accion\":\"ELIMINAR_PRODUCTO\"}");
+        intencion.PedirConfirmacion(DateTime.UtcNow.AddMinutes(2));
+        intencion.MarcarEjecutando();
+
+        intencion.Ejecutar("{\"respuesta\":\"listo\"}");
+
+        Assert.Equal(EstadoIntencion.EJECUTADA, intencion.Estado);
+        Assert.Equal("{\"respuesta\":\"listo\"}", intencion.ResultadoJson);
+    }
+
+    [Fact]
+    public void EjecucionVencida_CuandoNoEstaEjecutando_EsFalso()
+    {
+        var intencion = Recibir();
+        intencion.MarcarParseada("{}");
+        intencion.PedirConfirmacion(DateTime.UtcNow.AddMinutes(2));
+
+        Assert.False(intencion.EjecucionVencida(DateTime.UtcNow.AddMinutes(10), TimeSpan.FromMinutes(1)));
+    }
+
+    [Fact]
+    public void EjecucionVencida_CuandoElClaimEsViejo_EsVerdadero()
+    {
+        var intencion = Recibir();
+        intencion.MarcarParseada("{}");
+        intencion.PedirConfirmacion(DateTime.UtcNow.AddMinutes(2));
+        intencion.MarcarEjecutando();
+
+        Assert.False(intencion.EjecucionVencida(DateTime.UtcNow, TimeSpan.FromMinutes(1)));
+        Assert.True(intencion.EjecucionVencida(DateTime.UtcNow.AddMinutes(2), TimeSpan.FromMinutes(1)));
+    }
 }

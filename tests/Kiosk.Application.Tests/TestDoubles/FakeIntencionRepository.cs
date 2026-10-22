@@ -30,6 +30,47 @@ public sealed class FakeIntencionRepository : IIntencionRepository
             .OrderByDescending(i => i.CreatedAt)
             .FirstOrDefault());
 
+    public Task<IReadOnlyList<Intencion>> GetEjecutandoAsync(
+        Guid comercioId,
+        Canal canal,
+        string canalUsuarioId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<Intencion>>(_intenciones
+            .Where(i => i.ComercioId == comercioId && i.Canal == canal && i.CanalUsuarioId == canalUsuarioId && i.Estado == EstadoIntencion.EJECUTANDO)
+            .OrderByDescending(i => i.UpdatedAt)
+            .ToList());
+
+    public Task<ResultadoReclamo> TryReclamarAsync(
+        Guid id,
+        Guid comercioId,
+        Canal canal,
+        string canalUsuarioId,
+        CancellationToken cancellationToken = default)
+    {
+        var intencion = _intenciones.FirstOrDefault(i => i.Id == id);
+
+        if (intencion is null
+            || intencion.ComercioId != comercioId
+            || intencion.Canal != canal
+            || intencion.CanalUsuarioId != canalUsuarioId)
+        {
+            return Task.FromResult(ResultadoReclamo.NoResuelta);
+        }
+
+        if (intencion.Estado == EstadoIntencion.ESPERANDO_CONFIRMACION)
+        {
+            intencion.MarcarEjecutando();
+            return Task.FromResult(ResultadoReclamo.Reclamado);
+        }
+
+        return Task.FromResult(intencion.Estado switch
+        {
+            EstadoIntencion.EJECUTANDO => ResultadoReclamo.EnEjecucion,
+            EstadoIntencion.EJECUTADA => ResultadoReclamo.YaAplicada,
+            _ => ResultadoReclamo.NoResuelta
+        });
+    }
+
     public void Add(Intencion intencion)
         => _intenciones.Add(intencion);
 }

@@ -15,6 +15,8 @@ public sealed class FakeUnitOfWork : IUnitOfWork
 
     public bool LanzarError { get; set; }
 
+    public Action? AlGuardar { get; set; }
+
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         SaveChangesLlamadas++;
@@ -23,6 +25,8 @@ public sealed class FakeUnitOfWork : IUnitOfWork
         {
             throw new InvalidOperationException("Falla simulada de persistencia.");
         }
+
+        AlGuardar?.Invoke();
 
         foreach (var accion in _accionesAlGuardar)
         {

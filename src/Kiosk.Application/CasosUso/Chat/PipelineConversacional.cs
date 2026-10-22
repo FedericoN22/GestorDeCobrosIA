@@ -36,6 +36,7 @@ public sealed class PipelineConversacional
     private readonly IIaParser _parser;
     private readonly ResolvedorCatalogos _resolvedor;
     private readonly EjecutorAcciones _ejecutor;
+    private readonly VerificadorEfectoAplicado _verificador;
     private readonly IStockLedger _stockLedger;
 
     public PipelineConversacional(
@@ -46,6 +47,7 @@ public sealed class PipelineConversacional
         IIaParser parser,
         ResolvedorCatalogos resolvedor,
         EjecutorAcciones ejecutor,
+        VerificadorEfectoAplicado verificador,
         IStockLedger stockLedger)
     {
         _intenciones = intenciones;
@@ -55,6 +57,7 @@ public sealed class PipelineConversacional
         _parser = parser;
         _resolvedor = resolvedor;
         _ejecutor = ejecutor;
+        _verificador = verificador;
         _stockLedger = stockLedger;
     }
 
@@ -75,6 +78,12 @@ public sealed class PipelineConversacional
             {
                 var nombreVacio = await ObtenerNombreBotAsync(comercioId, cancellationToken);
                 return RespuestasBot.NoInterpretado(nombreVacio);
+            }
+
+            var reconciliacion = await ReconciliarEjecutandoAsync(comercioId, canal, canalUsuarioId, cancellationToken);
+            if (reconciliacion is not null && EsRespuestaConfirmacion(textoNormalizado))
+            {
+                return reconciliacion;
             }
 
             if (EsSaludo(textoNormalizado))
@@ -301,6 +310,21 @@ public sealed class PipelineConversacional
         if (Confirmaciones.Contains(textoNormalizado))
         {
             var comando = DeserializarComando(pendiente.StructuredCommandJson);
+            var reclamo = await _intenciones.TryReclamarAsync(
+                pendiente.Id, comercioId, canal, pendiente.CanalUsuarioId, ct);
+
+            if (reclamo != ResultadoReclamo.Reclamado)
+            {
+                return reclamo switch
+                {
+                    ResultadoReclamo.EnEjecucion => RespuestasBot.OperacionEnProceso,
+                    ResultadoReclamo.YaAplicada => RespuestasBot.OperacionYaAplicada,
+                    _ => RespuestasBot.OperacionNoResuelta
+                };
+            }
+
+            pendiente.MarcarEjecutando();
+
             var resolucion = await _resolvedor.ResolverAsync(comercioId, comando, ct);
 
             if (resolucion.Estado is not (EstadoResolucion.OK or EstadoResolucion.NO_APLICA))
@@ -333,6 +357,77 @@ public sealed class PipelineConversacional
         AuditoriaRegistrador.Registrar(_auditoria, comercioId, canal, pendiente.CanalUsuarioId,
             AuditoriaTipos.IntencionCancelada, new { pendiente.Id, confirmado = false });
         return RespuestasBot.OperacionCancelada;
+    }
+
+    private async Task<string?> ReconciliarEjecutandoAsync(
+        Guid comercioId,
+        Canal canal,
+        string canalUsuarioId,
+        CancellationToken ct)
+    {
+        var ejecutando = await _intenciones.GetEjecutandoAsync(comercioId, canal, canalUsuarioId, ct);
+        if (ejecutando.Count == 0)
+        {
+            return null;
+        }
+
+        var segundos = await ObtenerEnteroAsync(comercioId, ClavesConfiguracion.BotTimeoutEjecucionSegundos, 60, ct);
+        var timeout = TimeSpan.FromSeconds(Math.Max(0, segundos));
+        var ahora = DateTime.UtcNow;
+        string? mensaje = null;
+        var cambio = false;
+
+        for (var i = 0; i < ejecutando.Count; i++)
+        {
+            var intencion = ejecutando[i];
+            var esLaMasReciente = i == 0;
+
+            if (!intencion.EjecucionVencida(ahora, timeout))
+            {
+                if (esLaMasReciente)
+                {
+                    mensaje = RespuestasBot.OperacionEnProceso;
+                }
+
+                continue;
+            }
+
+            var comando = IntentarDeserializarComando(intencion.StructuredCommandJson);
+            var aplicada = comando is not null
+                && await _verificador.YaAplicadoAsync(comercioId, comando, ct);
+
+            if (aplicada)
+            {
+                intencion.Ejecutar(JsonSerializer.Serialize(new { reconciliada = true, resultado = "aplicada" }));
+                AuditoriaRegistrador.Registrar(_auditoria, comercioId, canal, canalUsuarioId,
+                    AuditoriaTipos.IntencionReconciliada, new { intencion.Id, resultado = "aplicada" });
+
+                if (esLaMasReciente)
+                {
+                    mensaje = RespuestasBot.OperacionReconciliadaAplicada;
+                }
+            }
+            else
+            {
+                intencion.MarcarError("No se pudo verificar si la operación se aplicó; revisá el catálogo.");
+                AuditoriaRegistrador.Registrar(_auditoria, comercioId, canal, canalUsuarioId,
+                    AuditoriaTipos.IntencionReconciliada, new { intencion.Id, resultado = "no_verificable" });
+
+                if (esLaMasReciente)
+                {
+                    mensaje = RespuestasBot.OperacionReconciliadaNoVerificable;
+                }
+            }
+
+            cambio = true;
+        }
+
+        if (cambio)
+        {
+            await _unitOfWork.SaveChangesAsync(ct);
+        }
+
+        return mensaje;
     }
 
     private async Task<string?> ObtenerTextoAsync(Guid comercioId, string clave, CancellationToken ct)
@@ -376,5 +471,22 @@ public sealed class PipelineConversacional
         }
 
         return JsonSerializer.Deserialize<StructuredCommand>(json) ?? throw new InvalidOperationException("Comando estructurado inválido.");
+    }
+
+    private static StructuredCommand? IntentarDeserializarComando(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<StructuredCommand>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }
