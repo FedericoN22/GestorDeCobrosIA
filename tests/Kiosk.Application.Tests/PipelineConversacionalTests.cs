@@ -554,6 +554,133 @@ public class PipelineConversacionalTests
         Assert.Null(pendienteAWhatsappDeOtroUsuario);
     }
 
+    [Fact]
+    public async Task ConfirmacionSi_SinIntencionPendiente_RespondeQueConfirmar()
+    {
+        var ctx = new Contexto();
+        ctx.Config.Set(ComercioId, ClavesConfiguracion.BotNombre, "asistente");
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.QueConfirmar, respuesta);
+        Assert.Empty(ctx.Intenciones.Intenciones);
+        Assert.Empty(ctx.Parser.Llamadas);
+    }
+
+    [Fact]
+    public async Task ConfirmacionNo_SinIntencionPendiente_RespondeNadaQueCancelar()
+    {
+        var ctx = new Contexto();
+        ctx.Config.Set(ComercioId, ClavesConfiguracion.BotNombre, "asistente");
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "NO", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.NadaQueCancelar, respuesta);
+        Assert.Empty(ctx.Intenciones.Intenciones);
+        Assert.Empty(ctx.Parser.Llamadas);
+    }
+
+    [Fact]
+    public async Task ConfirmacionSi_ConIntencionEjecutando_RespondeOperacionEnProceso()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 5, null, Canal.WEB));
+        var ejecutando = SeedIntencionEjecutando(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.OperacionEnProceso, respuesta);
+        Assert.Equal(EstadoIntencion.EJECUTANDO, ejecutando.Estado);
+        Assert.True(presentacion.Activa);
+        Assert.Empty(ctx.Parser.Llamadas);
+    }
+
+    [Fact]
+    public async Task ConfirmacionNo_ConIntencionEjecutando_RespondeNadaQueCancelar()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 5, null, Canal.WEB));
+        var ejecutando = SeedIntencionEjecutando(ctx, AccionIntencion.ELIMINAR_PRODUCTO, "COCA COLA", "1.5L");
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "NO", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.NadaQueCancelar, respuesta);
+        Assert.Equal(EstadoIntencion.EJECUTANDO, ejecutando.Estado);
+        Assert.True(presentacion.Activa);
+        Assert.Empty(ctx.Parser.Llamadas);
+    }
+
+    [Fact]
+    public async Task MensajeNoConfirmacion_SinIntencionPendiente_VaAlParser()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 12, null, Canal.WEB));
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CONSULTAR_STOCK, 0.95m, "COCA COLA", "1.5L")));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "cuanto stock hay de coca cola 1.5l", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.StockConsultado("Coca Cola", "1.5L", 12, null), respuesta);
+        Assert.Single(ctx.Parser.Llamadas);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.EJECUTADA, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task Confirmacion_AisladaPorComercioCanalYUsuario()
+    {
+        var comercioA = Guid.NewGuid();
+        var comercioB = Guid.NewGuid();
+        var usuarioX = "usuario-x";
+
+        var ctx = new Contexto();
+
+        var productoA = Producto.Crear(comercioA, null, "PRODUCTO A");
+        productoA.AgregarPresentacion("1.5L", 1500);
+        ctx.Productos.Seed(productoA);
+
+        var productoB = Producto.Crear(comercioB, null, "PRODUCTO B");
+        productoB.AgregarPresentacion("1.5L", 1500);
+        ctx.Productos.Seed(productoB);
+
+        var pendienteA = Intencion.Recibir(comercioA, Canal.WHATSAPP, usuarioX, "eliminar producto A");
+        pendienteA.MarcarParseada(JsonSerializer.Serialize(Comando(AccionIntencion.ELIMINAR_PRODUCTO, 0.95m, "PRODUCTO A", "1.5L")));
+        pendienteA.PedirConfirmacion(DateTime.UtcNow.AddMinutes(5));
+        ctx.Intenciones.Seed(pendienteA);
+
+        var pendienteB = Intencion.Recibir(comercioB, Canal.WHATSAPP, usuarioX, "eliminar producto B");
+        pendienteB.MarcarParseada(JsonSerializer.Serialize(Comando(AccionIntencion.ELIMINAR_PRODUCTO, 0.95m, "PRODUCTO B", "1.5L")));
+        pendienteB.PedirConfirmacion(DateTime.UtcNow.AddMinutes(5));
+        ctx.Intenciones.Seed(pendienteB);
+
+        var pendienteA_before = await ctx.Intenciones.GetPendienteAsync(comercioA, Canal.WHATSAPP, usuarioX);
+        var pendienteB_before = await ctx.Intenciones.GetPendienteAsync(comercioB, Canal.WHATSAPP, usuarioX);
+        Assert.NotNull(pendienteA_before);
+        Assert.NotNull(pendienteB_before);
+        Assert.Equal(EstadoIntencion.ESPERANDO_CONFIRMACION, pendienteA_before.Estado);
+        Assert.Equal(EstadoIntencion.ESPERANDO_CONFIRMACION, pendienteB_before.Estado);
+
+        var respuestaA = await ctx.Pipeline.ProcesarAsync(comercioA, Canal.WHATSAPP, usuarioX, "SI", false, CancellationToken.None);
+
+        var pendienteA_after1 = await ctx.Intenciones.GetPendienteAsync(comercioA, Canal.WHATSAPP, usuarioX);
+        var pendienteB_after1 = await ctx.Intenciones.GetPendienteAsync(comercioB, Canal.WHATSAPP, usuarioX);
+        Assert.Null(pendienteA_after1);
+        Assert.NotNull(pendienteB_after1);
+        Assert.Equal(EstadoIntencion.ESPERANDO_CONFIRMACION, pendienteB_after1.Estado);
+
+        var respuestaB = await ctx.Pipeline.ProcesarAsync(comercioB, Canal.WHATSAPP, usuarioX, "SI", false, CancellationToken.None);
+
+        var pendienteA_after2 = await ctx.Intenciones.GetPendienteAsync(comercioA, Canal.WHATSAPP, usuarioX);
+        var pendienteB_after2 = await ctx.Intenciones.GetPendienteAsync(comercioB, Canal.WHATSAPP, usuarioX);
+        Assert.Null(pendienteA_after2);
+        Assert.Null(pendienteB_after2);
+
+        Assert.Equal(EstadoIntencion.EJECUTADA, pendienteA.Estado);
+        Assert.Equal(EstadoIntencion.EJECUTADA, pendienteB.Estado);
+    }
+
     private sealed class DbEnMemoria : IDisposable
     {
         public List<Intencion> Intenciones { get; }

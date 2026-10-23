@@ -6,7 +6,6 @@ using Kiosk.Api.Seed;
 using Kiosk.Application.CasosUso.Autenticacion;
 using Kiosk.Domain.Usuarios;
 using Kiosk.Application.CasosUso.Catalogos;
-using Kiosk.Application.CasosUso.Intenciones;
 using Kiosk.Application.CasosUso.Reportes;
 using Kiosk.Application.CasosUso.Stock;
 using Kiosk.Application.CasosUso.Sync;
@@ -68,7 +67,6 @@ builder.Services.AddScoped<ServicioStock>();
 builder.Services.AddScoped<ServicioCaja>();
 builder.Services.AddScoped<ServicioVentas>();
 builder.Services.AddScoped<ServicioSync>();
-builder.Services.AddScoped<ServicioIntenciones>();
 builder.Services.AddScoped<ServicioReportes>();
 
 var openAi = builder.Configuration.GetSection("OpenAi");

@@ -71,27 +71,39 @@ public sealed class PipelineConversacional
     {
         Intencion? intencion = null;
 
-        try
-        {
-            var textoNormalizado = Normalizacion.Normalizar(texto);
-            if (string.IsNullOrWhiteSpace(textoNormalizado))
+try
             {
-                var nombreVacio = await ObtenerNombreBotAsync(comercioId, cancellationToken);
-                return RespuestasBot.NoInterpretado(nombreVacio);
-            }
+                var textoNormalizado = Normalizacion.Normalizar(texto);
+                if (string.IsNullOrWhiteSpace(textoNormalizado))
+                {
+                    var nombreVacio = await ObtenerNombreBotAsync(comercioId, cancellationToken);
+                    return RespuestasBot.NoInterpretado(nombreVacio);
+                }
 
-            var reconciliacion = await ReconciliarEjecutandoAsync(comercioId, canal, canalUsuarioId, cancellationToken);
-            if (reconciliacion is not null && EsRespuestaConfirmacion(textoNormalizado))
-            {
-                return reconciliacion;
-            }
+                var reconciliacion = await ReconciliarEjecutandoAsync(comercioId, canal, canalUsuarioId, cancellationToken);
 
-            if (EsSaludo(textoNormalizado))
-            {
-                return await ObtenerBienvenidaAsync(comercioId, cancellationToken);
-            }
+                var clasificacion = ClasificarConfirmacion(textoNormalizado);
+                if (clasificacion != TipoConfirmacion.Ninguna)
+                {
+                    if (clasificacion == TipoConfirmacion.Confirmar && reconciliacion is not null)
+                    {
+                        return reconciliacion;
+                    }
+                    return await ProcesarConfirmacionClasificadaAsync(
+                        comercioId, canal, canalUsuarioId, clasificacion, textoNormalizado, cancellationToken);
+                }
 
-            var pendiente = await _intenciones.GetPendienteAsync(comercioId, canal, canalUsuarioId, cancellationToken);
+                if (reconciliacion is not null)
+                {
+                    return reconciliacion;
+                }
+
+                if (EsSaludo(textoNormalizado))
+                {
+                    return await ObtenerBienvenidaAsync(comercioId, cancellationToken);
+                }
+
+                var pendiente = await _intenciones.GetPendienteAsync(comercioId, canal, canalUsuarioId, cancellationToken);
             if (pendiente is not null && pendiente.Estado == EstadoIntencion.ESPERANDO_CONFIRMACION)
             {
                 if (pendiente.ConfirmacionExpirada(DateTime.UtcNow))
@@ -99,13 +111,6 @@ public sealed class PipelineConversacional
                     pendiente.Cancelar("Timeout de confirmación expirado");
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
                     return RespuestasBot.TimeoutExpirado;
-                }
-
-                if (EsRespuestaConfirmacion(textoNormalizado))
-                {
-                    var respuesta = await ProcesarConfirmacionAsync(comercioId, canal, pendiente, textoNormalizado, cancellationToken);
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
-                    return respuesta;
                 }
 
                 pendiente.Cancelar("Reemplazada por una nueva intención");
@@ -462,6 +467,64 @@ public sealed class PipelineConversacional
 
     private static bool EsRespuestaConfirmacion(string normalizado)
         => Confirmaciones.Contains(normalizado) || Cancelaciones.Contains(normalizado);
+
+    private enum TipoConfirmacion
+    {
+        Ninguna = 0,
+        Confirmar = 1,
+        Cancelar = 2
+    }
+
+    private static TipoConfirmacion ClasificarConfirmacion(string normalizado)
+    {
+        if (Confirmaciones.Contains(normalizado))
+        {
+            return TipoConfirmacion.Confirmar;
+        }
+        if (Cancelaciones.Contains(normalizado))
+        {
+            return TipoConfirmacion.Cancelar;
+        }
+        return TipoConfirmacion.Ninguna;
+    }
+
+    private async Task<string> ProcesarConfirmacionClasificadaAsync(
+        Guid comercioId,
+        Canal canal,
+        string canalUsuarioId,
+        TipoConfirmacion tipo,
+        string textoNormalizado,
+        CancellationToken ct)
+    {
+        var pendiente = await _intenciones.GetPendienteAsync(comercioId, canal, canalUsuarioId, ct);
+        if (pendiente is not null && pendiente.Estado == EstadoIntencion.ESPERANDO_CONFIRMACION)
+        {
+            if (pendiente.ConfirmacionExpirada(DateTime.UtcNow))
+            {
+                pendiente.Cancelar("Timeout de confirmación expirado");
+                await _unitOfWork.SaveChangesAsync(ct);
+                return RespuestasBot.TimeoutExpirado;
+            }
+
+            var respuesta = await ProcesarConfirmacionAsync(comercioId, canal, pendiente, textoNormalizado, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+            return respuesta;
+        }
+
+        var ejecutando = await _intenciones.GetEjecutandoAsync(comercioId, canal, canalUsuarioId, ct);
+        if (ejecutando.Count > 0)
+        {
+            if (tipo == TipoConfirmacion.Confirmar)
+            {
+                return RespuestasBot.OperacionEnProceso;
+            }
+            return RespuestasBot.NadaQueCancelar;
+        }
+
+        return tipo == TipoConfirmacion.Confirmar
+            ? RespuestasBot.QueConfirmar
+            : RespuestasBot.NadaQueCancelar;
+    }
 
     private static StructuredCommand DeserializarComando(string? json)
     {

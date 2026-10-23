@@ -32,6 +32,12 @@ public static class RespuestasBot
     public const string OperacionNoResuelta =
         "Esa operación no llegó a completarse. Volvé a pedirla si la necesitás.";
 
+    public const string QueConfirmar =
+        "¿Qué querés confirmar? No hay ninguna operación pendiente.";
+
+    public const string NadaQueCancelar =
+        "No hay ninguna operación pendiente que cancelar.";
+
     public const string OperacionReconciliadaAplicada =
         "Tu operación anterior sí se aplicó. No la repitas.";
 
