@@ -28,11 +28,12 @@ public class PipelineConversacionalTests
             var stock = new ServicioStock(Productos, Ledger, Auditoria, Uow);
             var productos = new ServicioProductos(Productos, Categorias, Auditoria, Uow);
             Resolvedor = new ResolvedorCatalogos(Productos);
-            Ejecutor = new EjecutorAcciones(stock, productos, Resolvedor, Ledger);
+            Ejecutor = new EjecutorAcciones(stock, productos, Resolvedor, Ledger, Config);
             Verificador = new VerificadorEfectoAplicado(Resolvedor);
+            ConfirmationPolicy = new ConfirmationPolicy(Config);
 
             Pipeline = new PipelineConversacional(
-                Intenciones, Uow, Config, Auditoria, Parser, Resolvedor, Ejecutor, Verificador, Ledger);
+                Intenciones, Uow, Config, Auditoria, Parser, Resolvedor, Ejecutor, Verificador, Ledger, ConfirmationPolicy);
         }
 
         public FakeIntencionRepository Intenciones { get; } = new();
@@ -46,6 +47,7 @@ public class PipelineConversacionalTests
         public ResolvedorCatalogos Resolvedor { get; }
         public EjecutorAcciones Ejecutor { get; }
         public VerificadorEfectoAplicado Verificador { get; }
+        public ConfirmationPolicy ConfirmationPolicy { get; }
         public PipelineConversacional Pipeline { get; }
     }
 
@@ -83,13 +85,14 @@ public class PipelineConversacionalTests
         string? presentacion = null,
         int? cantidad = null,
         int? precio = null,
+        TipoPrecio tipoPrecio = TipoPrecio.NO_INDICADO,
         IReadOnlyList<string>? faltantes = null,
         IReadOnlyList<string>? ambiguos = null)
         => new(
             1,
             accion,
             presentacion is null ? "PRODUCTO" : "PRESENTACION",
-            new ParametrosComando(producto, presentacion, cantidad, precio, TipoPrecio.NO_INDICADO, null, producto),
+            new ParametrosComando(producto, presentacion, cantidad, precio, tipoPrecio, null, producto),
             confianza,
             faltantes ?? [],
             ambiguos ?? [],
@@ -223,7 +226,7 @@ public class PipelineConversacionalTests
         var ctx = new Contexto();
         ctx.Config.Set(ComercioId, ClavesConfiguracion.BotNombre, "asistente");
         ctx.Parser.Responder(ResultadoParseo.Ok(Comando(
-            AccionIntencion.AGREGAR_STOCK, 0.9m, "COCA", "1.5L", null, null, ["cantidad"])));
+            AccionIntencion.AGREGAR_STOCK, 0.9m, "COCA", "1.5L", null, null, TipoPrecio.NO_INDICADO, ["cantidad"])));
 
         var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "agregar coca", false, CancellationToken.None);
 
@@ -771,8 +774,175 @@ public class PipelineConversacionalTests
             });
         }
 
-        public void Add(Kiosk.Domain.Whatsapp.Intencion intencion)
+public void Add(Kiosk.Domain.Whatsapp.Intencion intencion)
             => _db.Intenciones.Add(intencion);
+    }
+
+    [Fact]
+    public async Task AgregarStock_Cantidad200_NoPideConfirmacion_EjecutaDirectamente()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.AGREGAR_STOCK, 0.95m, "COCA COLA", "1.5L", 200)));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "agregar coca cola 1.5l cantidad 200", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.StockAgregado("Coca Cola", "1.5L", 200, 200), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.EJECUTADA, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task AgregarStock_Cantidad201_PideConfirmacion()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.AGREGAR_STOCK, 0.95m, "COCA COLA", "1.5L", 201)));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "agregar coca cola 1.5l cantidad 201", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.ConfirmarAgregarStock("Coca Cola", "1.5L", 201, null), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.ESPERANDO_CONFIRMACION, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task AgregarStock_Cantidad201_ConfirmacionSi_Ejecuta()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.AGREGAR_STOCK, 0.95m, "COCA COLA", "1.5L", 201)));
+
+        await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "agregar coca cola 1.5l cantidad 201", false, CancellationToken.None);
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.StockAgregado("Coca Cola", "1.5L", 201, 201), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.EJECUTADA, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task CrearProducto_SiemprePideConfirmacion()
+    {
+        var ctx = new Contexto();
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CREAR_PRODUCTO, 0.95m, "SPRITE", "2L", precio: 100)));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "crear producto sprite 2l precio 100", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.ConfirmarCrearProducto("SPRITE", "2L", 10000), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.ESPERANDO_CONFIRMACION, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task CrearProducto_ConfirmacionSi_CreaProducto()
+    {
+        var ctx = new Contexto();
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CREAR_PRODUCTO, 0.95m, "SPRITE", "2L", precio: 100)));
+
+        await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "crear producto sprite 2l precio 100", false, CancellationToken.None);
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.ProductoCreado("SPRITE", "2L", 10000), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.EJECUTADA, intencion.Estado);
+        Assert.Contains(ctx.Productos.Productos, p => p.Nombre == "SPRITE");
+    }
+
+    [Fact]
+    public async Task ConsultarStock_NuncaPideConfirmacion()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Ledger.Seed(MovimientoStock.EntradaManual(presentacion.Id, 10, null, Canal.WEB));
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CONSULTAR_STOCK, 0.95m, "COCA COLA", "1.5L")));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "cuanto stock hay de coca cola 1.5l", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.StockConsultado("Coca Cola", "1.5L", 10, null), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.EJECUTADA, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task ConsultarPrecio_NuncaPideConfirmacion()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.CONSULTAR_PRECIO, 0.95m, "COCA COLA", "1.5L")));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "cuanto sale coca cola 1.5l", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.PrecioConsultado("Coca Cola", "1.5L", 1500), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.EJECUTADA, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task ListarProductos_NuncaPideConfirmacion()
+    {
+        var ctx = new Contexto();
+        SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.LISTAR_PRODUCTOS, 0.95m)));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "listar productos", false, CancellationToken.None);
+
+        Assert.Contains("Coca Cola 1.5L", respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.EJECUTADA, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task AgregarStock_ParserEnviaPrecioCosto_RechazaEnEjecucion()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.AGREGAR_STOCK, 0.95m, "COCA COLA", "1.5L", 10, 42, TipoPrecio.COSTO)));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "agregar coca cola 1.5l cantidad 10 precio costo 42", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.ErrorConMotivo("El chatbot no puede modificar el precio de costo. Use el panel de administración para actualizar costos."), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.ERROR, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task ModificarPrecio_PrecioExcedeLimite_RechazaEnEjecucion()
+    {
+        var ctx = new Contexto();
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.MODIFICAR_PRECIO, 0.95m, "COCA COLA", "1.5L", precio: 10_000_001)));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "cambiar precio de coca cola 1.5l a 10000001", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.ConfirmarModificarPrecio("Coca Cola", "1.5L", 1500, 1_000_000_100), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.ESPERANDO_CONFIRMACION, intencion.Estado);
+
+        respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.ErrorConMotivo("El precio $10.000.001,00 supera el máximo permitido de $10.000.000,00."), respuesta);
+        Assert.Equal(EstadoIntencion.ERROR, intencion.Estado);
+    }
+
+    [Fact]
+    public async Task AgregarStock_LimiteConfigurable_SeAplicaEnPipeline()
+    {
+        var ctx = new Contexto();
+        ctx.Config.Set(ComercioId, ClavesConfiguracion.BotStockCantidadMaxima, "150");
+        var presentacion = SeedProducto(ctx, "Coca Cola", "1.5L");
+        ctx.Parser.Responder(ResultadoParseo.Ok(Comando(AccionIntencion.AGREGAR_STOCK, 0.95m, "COCA COLA", "1.5L", 201)));
+
+        var respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "agregar coca cola 1.5l cantidad 201", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.ConfirmarAgregarStock("Coca Cola", "1.5L", 201, null), respuesta);
+        var intencion = Assert.Single(ctx.Intenciones.Intenciones);
+        Assert.Equal(EstadoIntencion.ESPERANDO_CONFIRMACION, intencion.Estado);
+
+        respuesta = await ctx.Pipeline.ProcesarAsync(ComercioId, Canal.WHATSAPP, CanalUsuarioId, "SI", false, CancellationToken.None);
+
+        Assert.Equal(RespuestasBot.ErrorConMotivo("La cantidad 201 supera el máximo permitido de 150 unidades por operación."), respuesta);
+        Assert.Equal(EstadoIntencion.ERROR, intencion.Estado);
     }
 }
 

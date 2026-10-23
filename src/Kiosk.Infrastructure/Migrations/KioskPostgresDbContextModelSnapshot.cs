@@ -258,6 +258,11 @@ namespace Kiosk.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("cantidad");
 
+                    b.Property<string>("ClaveIdempotencia")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("clave_idempotencia");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -289,6 +294,10 @@ namespace Kiosk.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_movimientos_stock");
+
+                    b.HasIndex("ClaveIdempotencia")
+                        .IsUnique()
+                        .HasFilter("\"clave_idempotencia\" IS NOT NULL");
 
                     b.HasIndex("VentaId");
 

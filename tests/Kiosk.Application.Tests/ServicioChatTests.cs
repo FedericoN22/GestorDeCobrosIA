@@ -20,11 +20,12 @@ public class ServicioChatTests
             var stock = new ServicioStock(Productos, Ledger, Auditoria, Uow);
             var productos = new ServicioProductos(Productos, Categorias, Auditoria, Uow);
             var resolvedor = new ResolvedorCatalogos(Productos);
-            var ejecutor = new EjecutorAcciones(stock, productos, resolvedor, Ledger);
+            var ejecutor = new EjecutorAcciones(stock, productos, resolvedor, Ledger, Config);
             var verificador = new VerificadorEfectoAplicado(resolvedor);
+            var confirmationPolicy = new ConfirmationPolicy(Config);
 
             Pipeline = new PipelineConversacional(
-                Intenciones, Uow, Config, Auditoria, Parser, resolvedor, ejecutor, verificador, Ledger);
+                Intenciones, Uow, Config, Auditoria, Parser, resolvedor, ejecutor, verificador, Ledger, confirmationPolicy);
 
             Servicio = new ServicioChat(Pipeline);
         }

@@ -115,4 +115,17 @@ public sealed class FakeStockLedger : IStockLedger
             return Task.FromResult<IReadOnlyList<MovimientoStock>>(filtrados.ToList());
         }
     }
+
+    public Task<MovimientoStock?> ObtenerPorClaveIdempotenciaAsync(string claveIdempotencia, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(claveIdempotencia))
+        {
+            return Task.FromResult<MovimientoStock?>(null);
+        }
+
+        lock (_lock)
+        {
+            return Task.FromResult(_comprometidos.FirstOrDefault(m => m.ClaveIdempotencia == claveIdempotencia));
+        }
+    }
 }

@@ -1,4 +1,6 @@
 using Kiosk.Domain.Common;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Kiosk.Domain.Stock;
 
@@ -21,10 +23,11 @@ public class MovimientoStock
     public Guid? UsuarioId { get; private set; }
     public Canal Origen { get; private set; }
     public DateTime CreatedAt { get; private set; }
+    public string? ClaveIdempotencia { get; private set; }
 
     private MovimientoStock() { }
 
-    private static MovimientoStock Crear(Guid presentacionId, TipoMovimiento tipo, int cantidad, string? motivo, Guid? ventaId, Guid? usuarioId, Canal origen)
+    private static MovimientoStock Crear(Guid presentacionId, TipoMovimiento tipo, int cantidad, string? motivo, Guid? ventaId, Guid? usuarioId, Canal origen, string? claveIdempotencia = null)
     {
         return new MovimientoStock
         {
@@ -36,21 +39,30 @@ public class MovimientoStock
             VentaId = ventaId,
             UsuarioId = usuarioId,
             Origen = origen,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            ClaveIdempotencia = claveIdempotencia
         };
     }
 
-    public static MovimientoStock EntradaManual(Guid presentacionId, int cantidad, Guid? usuarioId, Canal origen)
+    public static string GenerarClaveIdempotencia(Guid intencionId, string accion, Guid presentacionId, int cantidad, int? precioCostoCentavos)
+    {
+        var input = $"{intencionId}|{accion}|{presentacionId}|{cantidad}|{precioCostoCentavos ?? 0}";
+        using var sha256 = SHA256.Create();
+        var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
+        return Convert.ToHexString(hash);
+    }
+
+    public static MovimientoStock EntradaManual(Guid presentacionId, int cantidad, Guid? usuarioId, Canal origen, string? claveIdempotencia = null)
     {
         if (cantidad <= 0)
         {
             throw new DomainException("STOCK_CANTIDAD_INVALIDA", "La cantidad de entrada debe ser mayor a cero.");
         }
 
-        return Crear(presentacionId, TipoMovimiento.ENTRADA_MANUAL, cantidad, null, null, usuarioId, origen);
+        return Crear(presentacionId, TipoMovimiento.ENTRADA_MANUAL, cantidad, null, null, usuarioId, origen, claveIdempotencia);
     }
 
-    public static MovimientoStock Ajuste(Guid presentacionId, int cantidad, string motivo, Guid? usuarioId, Canal origen)
+    public static MovimientoStock Ajuste(Guid presentacionId, int cantidad, string motivo, Guid? usuarioId, Canal origen, string? claveIdempotencia = null)
     {
         if (cantidad == 0)
         {
@@ -62,7 +74,7 @@ public class MovimientoStock
             throw new DomainException("STOCK_MOTIVO_REQUERIDO", "Un ajuste de stock requiere un motivo.");
         }
 
-        return Crear(presentacionId, TipoMovimiento.AJUSTE, cantidad, motivo.Trim(), null, usuarioId, origen);
+        return Crear(presentacionId, TipoMovimiento.AJUSTE, cantidad, motivo.Trim(), null, usuarioId, origen, claveIdempotencia);
     }
 
     public static MovimientoStock Venta(Guid presentacionId, int cantidadVendida, Guid ventaId, Canal origen)

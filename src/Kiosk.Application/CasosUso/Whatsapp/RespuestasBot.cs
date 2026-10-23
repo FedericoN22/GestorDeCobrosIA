@@ -100,6 +100,32 @@ public static class RespuestasBot
         $"Stock actual: {stockActual}. Queda: 0.\n" +
         "Respondé SI, CONFIRMO, OK o DALE para confirmar, o NO/CANCELAR para cancelar.";
 
+    public static string ConfirmarAgregarStock(string producto, string presentacion, int cantidad, int? costoCentavos)
+    {
+        var sb = new StringBuilder($"¿Confirmás agregar {cantidad} unidades de {producto} {presentacion}?");
+        if (costoCentavos.HasValue)
+        {
+            sb.Append($"\nCosto de referencia: {Pesos(costoCentavos.Value)}.");
+        }
+        sb.Append("\nRespondé SI, CONFIRMO, OK o DALE para confirmar, o NO/CANCELAR para cancelar.");
+        return sb.ToString();
+    }
+
+    public static string ConfirmarCrearProducto(string producto, string? presentacion, int? precioVentaCentavos)
+    {
+        var sb = new StringBuilder($"¿Confirmás crear el producto \"{producto}\"");
+        if (!string.IsNullOrWhiteSpace(presentacion))
+        {
+            sb.Append($" con presentación {presentacion}");
+        }
+        if (precioVentaCentavos.HasValue)
+        {
+            sb.Append($" a {Pesos(precioVentaCentavos.Value)}");
+        }
+        sb.Append("?\nRespondé SI, CONFIRMO, OK o DALE para confirmar, o NO/CANCELAR para cancelar.");
+        return sb.ToString();
+    }
+
     public static string StockConsultado(string producto, string presentacion, int stock, int? stockMinimo)
     {
         var baseMsg = $"Stock de {producto} {presentacion}: {stock} unidad(es).";

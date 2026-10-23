@@ -38,6 +38,7 @@ public sealed class PipelineConversacional
     private readonly EjecutorAcciones _ejecutor;
     private readonly VerificadorEfectoAplicado _verificador;
     private readonly IStockLedger _stockLedger;
+    private readonly ConfirmationPolicy _confirmationPolicy;
 
     public PipelineConversacional(
         IIntencionRepository intenciones,
@@ -48,7 +49,8 @@ public sealed class PipelineConversacional
         ResolvedorCatalogos resolvedor,
         EjecutorAcciones ejecutor,
         VerificadorEfectoAplicado verificador,
-        IStockLedger stockLedger)
+        IStockLedger stockLedger,
+        ConfirmationPolicy confirmationPolicy)
     {
         _intenciones = intenciones;
         _unitOfWork = unitOfWork;
@@ -59,6 +61,7 @@ public sealed class PipelineConversacional
         _ejecutor = ejecutor;
         _verificador = verificador;
         _stockLedger = stockLedger;
+        _confirmationPolicy = confirmationPolicy;
     }
 
     public async Task<string> ProcesarAsync(
@@ -234,7 +237,8 @@ try
             return RespuestasBot.ElegiPresentacion(comando.Parametros.Producto ?? "", presentaciones);
         }
 
-        if (comando.EsDestructivo)
+        var requiereConfirmacion = await _confirmationPolicy.RequiereConfirmacionAsync(comercioId, comando, resolucion.Coincidencia, ct);
+        if (requiereConfirmacion)
         {
             var minutos = await ObtenerEnteroAsync(comercioId, ClavesConfiguracion.BotConfirmacionMinutos, 2, ct);
             var expira = DateTime.UtcNow.AddMinutes(Math.Max(1, minutos));
@@ -255,7 +259,7 @@ try
         CoincidenciaPresentacion? objetivo,
         CancellationToken ct)
     {
-        if (objetivo is null)
+        if (objetivo is null && comando.Accion != AccionIntencion.CREAR_PRODUCTO)
         {
             return "¿Confirmás la operación? Respondé SI o NO.";
         }
@@ -263,7 +267,7 @@ try
         if (comando.Accion == AccionIntencion.MODIFICAR_PRECIO)
         {
             return RespuestasBot.ConfirmarModificarPrecio(
-                objetivo.Producto.Nombre,
+                objetivo!.Producto.Nombre,
                 objetivo.Presentacion.Nombre,
                 objetivo.Presentacion.PrecioVentaCentavos,
                 comando.Parametros.Precio!.Value * 100);
@@ -271,11 +275,32 @@ try
 
         if (comando.Accion == AccionIntencion.ELIMINAR_PRODUCTO)
         {
-            var stock = await _stockLedger.CalcularStockAsync(objetivo.Presentacion.Id, ct);
+            var stock = await _stockLedger.CalcularStockAsync(objetivo!.Presentacion.Id, ct);
             return RespuestasBot.ConfirmarEliminar(
                 objetivo.Producto.Nombre,
                 objetivo.Presentacion.Nombre,
                 stock);
+        }
+
+        if (comando.Accion == AccionIntencion.AGREGAR_STOCK)
+        {
+            var cantidad = comando.Parametros.Cantidad ?? 0;
+            var costo = comando.Parametros.TipoPrecio == TipoPrecio.COSTO && comando.Parametros.Precio.HasValue
+                ? comando.Parametros.Precio.Value * 100
+                : (int?)null;
+            return RespuestasBot.ConfirmarAgregarStock(
+                objetivo!.Producto.Nombre,
+                objetivo.Presentacion.Nombre,
+                cantidad,
+                costo);
+        }
+
+        if (comando.Accion == AccionIntencion.CREAR_PRODUCTO)
+        {
+            var p = comando.Parametros;
+            var presentacion = p.Presentacion;
+            var precioVenta = p.Precio.HasValue ? p.Precio.Value * 100 : (int?)null;
+            return RespuestasBot.ConfirmarCrearProducto(p.Producto!, presentacion, precioVenta);
         }
 
         return "¿Confirmás la operación? Respondé SI o NO.";
@@ -289,7 +314,7 @@ try
         CoincidenciaPresentacion? objetivo,
         CancellationToken ct)
     {
-        var resultado = await _ejecutor.EjecutarAsync(comercioId, comando, objetivo, intencion.CanalUsuarioId, ct);
+        var resultado = await _ejecutor.EjecutarAsync(comercioId, comando, objetivo, intencion.CanalUsuarioId, intencion.Id, ct);
 
         if (!resultado)
         {
@@ -340,7 +365,7 @@ try
                 return RespuestasBot.CanceladoPorError(resolucion.Motivo ?? "el objetivo ya no existe");
             }
 
-            var resultado = await _ejecutor.EjecutarAsync(comercioId, comando, resolucion.Coincidencia, pendiente.CanalUsuarioId, ct);
+            var resultado = await _ejecutor.EjecutarAsync(comercioId, comando, resolucion.Coincidencia, pendiente.CanalUsuarioId, pendiente.Id, ct);
 
             if (!resultado)
             {

@@ -4,28 +4,34 @@ using Kiosk.Application.CasosUso.Stock;
 using Kiosk.Application.Intenciones;
 using Kiosk.Application.Puertos.Repositorios;
 using Kiosk.Domain.Common;
+using Kiosk.Domain.Stock;
 
 namespace Kiosk.Application.CasosUso.Whatsapp;
 
 public sealed class EjecutorAcciones
 {
     private const int MaxLineasListado = 20;
+    private const int MaxCantidadIncrementoAbsoluto = 1000;
+    private const int MaxPrecioVentaCentavos = 10_000_000 * 100;
 
     private readonly ServicioStock _stock;
     private readonly ServicioProductos _productos;
     private readonly ResolvedorCatalogos _resolvedor;
     private readonly IStockLedger _stockLedger;
+    private readonly IConfiguracionRepository _config;
 
     public EjecutorAcciones(
         ServicioStock stock,
         ServicioProductos productos,
         ResolvedorCatalogos resolvedor,
-        IStockLedger stockLedger)
+        IStockLedger stockLedger,
+        IConfiguracionRepository config)
     {
         _stock = stock;
         _productos = productos;
         _resolvedor = resolvedor;
         _stockLedger = stockLedger;
+        _config = config;
     }
 
     public async Task<Result<string>> EjecutarAsync(
@@ -33,6 +39,7 @@ public sealed class EjecutorAcciones
         StructuredCommand comando,
         CoincidenciaPresentacion? objetivo,
         string actor,
+        Guid intencionId,
         CancellationToken cancellationToken = default)
     {
         return comando.Accion switch
@@ -40,7 +47,7 @@ public sealed class EjecutorAcciones
             AccionIntencion.CONSULTAR_STOCK => await ConsultarStockAsync(comercioId, objetivo!, actor, cancellationToken),
             AccionIntencion.CONSULTAR_PRECIO => await ConsultarPrecioAsync(comercioId, objetivo!, actor, cancellationToken),
             AccionIntencion.LISTAR_PRODUCTOS => await ListarAsync(comercioId, cancellationToken),
-            AccionIntencion.AGREGAR_STOCK => await AgregarStockAsync(comercioId, objetivo!, comando.Parametros, actor, cancellationToken),
+            AccionIntencion.AGREGAR_STOCK => await AgregarStockAsync(comercioId, objetivo!, comando.Parametros, actor, intencionId, cancellationToken),
             AccionIntencion.CREAR_PRODUCTO => await CrearProductoAsync(comercioId, comando.Parametros, actor, cancellationToken),
             AccionIntencion.MODIFICAR_PRECIO => await ModificarPrecioAsync(comercioId, objetivo!, comando.Parametros, actor, cancellationToken),
             AccionIntencion.ELIMINAR_PRODUCTO => await EliminarAsync(comercioId, objetivo!, actor, cancellationToken),
@@ -100,12 +107,36 @@ public sealed class EjecutorAcciones
         return Result<string>.Ok(RespuestasBot.ProductosListados(string.Join('\n', lineas), hayMas));
     }
 
-    private async Task<Result<string>> AgregarStockAsync(Guid comercioId, CoincidenciaPresentacion objetivo, ParametrosComando p, string actor, CancellationToken ct)
+    private async Task<Result<string>> AgregarStockAsync(Guid comercioId, CoincidenciaPresentacion objetivo, ParametrosComando p, string actor, Guid intencionId, CancellationToken ct)
     {
         var cantidad = p.Cantidad ?? 0;
-        var costo = p.TipoPrecio == TipoPrecio.COSTO && p.Precio.HasValue
-            ? (int?)Acentavos(p.Precio.Value)
-            : null;
+
+        if (p.TipoPrecio == TipoPrecio.COSTO)
+        {
+            return Result<string>.Fail(new Error(
+                "PRECIO_COSTO_NO_PERMITIDO",
+                "El chatbot no puede modificar el precio de costo. Use el panel de administración para actualizar costos."));
+        }
+
+        var maxPermitido = await ObtenerMaxCantidadPermitidaAsync(comercioId, ct);
+        if (!ValidarLimiteCantidad(cantidad, maxPermitido))
+        {
+            return Result<string>.Fail(new Error(
+                "CANTIDAD_EXCEDE_LIMITE",
+                $"La cantidad {cantidad} supera el máximo permitido de {maxPermitido} unidades por operación."));
+        }
+
+        if (objetivo.Producto.ComercioId != comercioId)
+        {
+            return Result<string>.Fail(new Error("PRESENTACION_NO_PERTENECE_COMERCIO", "La presentación no pertenece al comercio."));
+        }
+
+        var claveIdempotencia = MovimientoStock.GenerarClaveIdempotencia(
+            intencionId,
+            "AGREGAR_STOCK",
+            objetivo.Presentacion.Id,
+            cantidad,
+            null);
 
         var resultado = await _stock.EntradaManualAsync(new EntradaManualCommand(
             comercioId,
@@ -114,7 +145,8 @@ public sealed class EjecutorAcciones
             null,
             actor,
             Canal.WHATSAPP,
-            costo), ct);
+            null,
+            claveIdempotencia), ct);
 
         if (!resultado)
         {
@@ -127,6 +159,19 @@ public sealed class EjecutorAcciones
             cantidad,
             resultado.Value!.StockActual));
     }
+
+    private async Task<int> ObtenerMaxCantidadPermitidaAsync(Guid comercioId, CancellationToken ct)
+    {
+        var valor = await _config.GetAsync(comercioId, ClavesConfiguracion.BotStockCantidadMaxima, ct);
+        if (int.TryParse(valor?.Valor, out var configurado) && configurado > 0)
+        {
+            return Math.Min(MaxCantidadIncrementoAbsoluto, configurado);
+        }
+        return MaxCantidadIncrementoAbsoluto;
+    }
+
+    private static bool ValidarLimiteCantidad(int cantidad, int maxPermitido)
+        => cantidad > 0 && cantidad <= maxPermitido;
 
     private async Task<Result<string>> CrearProductoAsync(Guid comercioId, ParametrosComando p, string actor, CancellationToken ct)
     {
@@ -153,16 +198,23 @@ public sealed class EjecutorAcciones
             return Result<string>.Fail(new Error("PRECIO_REQUERIDO", "Para crear una presentación se necesita un precio de venta."));
         }
 
-var presentacion = await _productos.AgregarPresentacionAsync(new AgregarPresentacionCommand(
-             comercioId,
-             creado.Value!.ProductoId,
-             p.Presentacion,
-             precioVenta,
-             null,
-             null,
-             null,
-             actor,
-             Canal.WHATSAPP), ct);
+        if (precioVenta > MaxPrecioVentaCentavos)
+        {
+            return Result<string>.Fail(new Error(
+                "PRECIO_EXCEDE_LIMITE",
+                $"El precio {RespuestasBot.Pesos(precioVenta)} supera el máximo permitido de {RespuestasBot.Pesos(MaxPrecioVentaCentavos)}."));
+        }
+
+        var presentacion = await _productos.AgregarPresentacionAsync(new AgregarPresentacionCommand(
+                     comercioId,
+                     creado.Value!.ProductoId,
+                     p.Presentacion,
+                     precioVenta,
+                     null,
+                     null,
+                     null,
+                     actor,
+                     Canal.WHATSAPP), ct);
 
         if (!presentacion)
         {
@@ -175,17 +227,31 @@ var presentacion = await _productos.AgregarPresentacionAsync(new AgregarPresenta
     private async Task<Result<string>> ModificarPrecioAsync(Guid comercioId, CoincidenciaPresentacion objetivo, ParametrosComando p, string actor, CancellationToken ct)
     {
         var presentacion = objetivo.Presentacion;
+
+        if (objetivo.Producto.ComercioId != comercioId)
+        {
+            return Result<string>.Fail(new Error("PRESENTACION_NO_PERTENECE_COMERCIO", "La presentación no pertenece al comercio."));
+        }
+
         var precioVentaCentavos = Acentavos(p.Precio!.Value);
-var resultado = await _productos.EditarPresentacionAsync(new EditarPresentacionCommand(
-             comercioId,
-             presentacion.Id,
-             presentacion.Nombre,
-             precioVentaCentavos,
-             presentacion.PrecioCostoCentavos,
-             presentacion.CodigoBarras,
-             null,
-             actor,
-             Canal.WHATSAPP), ct);
+
+        if (precioVentaCentavos > MaxPrecioVentaCentavos)
+        {
+            return Result<string>.Fail(new Error(
+                "PRECIO_EXCEDE_LIMITE",
+                $"El precio {RespuestasBot.Pesos(precioVentaCentavos)} supera el máximo permitido de {RespuestasBot.Pesos(MaxPrecioVentaCentavos)}."));
+        }
+
+        var resultado = await _productos.EditarPresentacionAsync(new EditarPresentacionCommand(
+                     comercioId,
+                     presentacion.Id,
+                     presentacion.Nombre,
+                     precioVentaCentavos,
+                     presentacion.PrecioCostoCentavos,
+                     presentacion.CodigoBarras,
+                     null,
+                     actor,
+                     Canal.WHATSAPP), ct);
 
         if (!resultado)
         {
@@ -200,6 +266,11 @@ var resultado = await _productos.EditarPresentacionAsync(new EditarPresentacionC
 
     private async Task<Result<string>> EliminarAsync(Guid comercioId, CoincidenciaPresentacion objetivo, string actor, CancellationToken ct)
     {
+        if (objetivo.Producto.ComercioId != comercioId)
+        {
+            return Result<string>.Fail(new Error("PRESENTACION_NO_PERTENECE_COMERCIO", "La presentación no pertenece al comercio."));
+        }
+
         var resultado = await _productos.DesactivarPresentacionAsync(new DesactivarPresentacionCommand(
             comercioId,
             objetivo.Presentacion.Id,

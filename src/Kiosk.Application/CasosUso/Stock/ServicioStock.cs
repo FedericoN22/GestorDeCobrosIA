@@ -16,7 +16,8 @@ public sealed record EntradaManualCommand(
     Guid? UsuarioId,
     string Actor,
     Canal Origen,
-    int? PrecioCostoCentavos = null);
+    int? PrecioCostoCentavos = null,
+    string? ClaveIdempotencia = null);
 
 public sealed record AjusteStockCommand(
     Guid ComercioId,
@@ -71,7 +72,29 @@ public sealed class ServicioStock
         await LockStock.WaitAsync(cancellationToken);
         try
         {
-            var movimiento = MovimientoStock.EntradaManual(command.PresentacionId, command.Cantidad, command.UsuarioId, command.Origen);
+            if (!string.IsNullOrWhiteSpace(command.ClaveIdempotencia))
+            {
+                var existente = await _stockLedger.ObtenerPorClaveIdempotenciaAsync(command.ClaveIdempotencia, cancellationToken);
+                if (existente is not null)
+                {
+                    if (existente.PresentacionId != command.PresentacionId
+                        || existente.Cantidad != command.Cantidad
+                        || existente.Tipo != TipoMovimiento.ENTRADA_MANUAL)
+                    {
+                        return Result<StockActualResult>.Fail(
+                            new Error("IDEMPOTENCIA_CONFLICTO", "La clave de idempotencia ya existe con datos incompatibles."));
+                    }
+
+                    var stockExistente = await _stockLedger.CalcularStockAsync(command.PresentacionId, cancellationToken);
+                    return Result<StockActualResult>.Ok(new StockActualResult(
+                        presentacion.Id,
+                        stockExistente,
+                        presentacion.StockMinimo,
+                        presentacion.StockMinimo.HasValue && stockExistente <= presentacion.StockMinimo.Value));
+                }
+            }
+
+            var movimiento = MovimientoStock.EntradaManual(command.PresentacionId, command.Cantidad, command.UsuarioId, command.Origen, command.ClaveIdempotencia);
             var stockActual = await _stockLedger.CalcularStockAsync(command.PresentacionId, cancellationToken);
             var stockProyectado = stockActual + movimiento.Cantidad;
             presentacion.ActualizarStock(stockProyectado);

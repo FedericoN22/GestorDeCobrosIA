@@ -77,8 +77,10 @@ public class KioskDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<MovimientoStock>(e =>
         {
             e.Property(m => m.Motivo).HasMaxLength(200);
+            e.Property(m => m.ClaveIdempotencia).HasMaxLength(64);
             e.HasIndex(m => new { m.PresentacionId, m.CreatedAt });
             e.HasIndex(m => m.VentaId);
+            e.HasIndex(m => m.ClaveIdempotencia).IsUnique().HasFilter("\"clave_idempotencia\" IS NOT NULL");
             e.HasOne<Presentacion>().WithMany().HasForeignKey(m => m.PresentacionId);
             e.HasOne<Venta>().WithMany().HasForeignKey(m => m.VentaId).IsRequired(false);
         });

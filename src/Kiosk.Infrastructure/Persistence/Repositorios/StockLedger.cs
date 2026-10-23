@@ -92,6 +92,17 @@ public sealed class StockLedger : IStockLedger
         return lista;
     }
 
+    public async Task<MovimientoStock?> ObtenerPorClaveIdempotenciaAsync(string claveIdempotencia, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(claveIdempotencia))
+        {
+            return null;
+        }
+
+        return await _db.MovimientosStock
+            .FirstOrDefaultAsync(m => m.ClaveIdempotencia == claveIdempotencia, cancellationToken);
+    }
+
     public void Add(MovimientoStock movimiento)
         => _db.MovimientosStock.Add(movimiento);
 }

@@ -139,4 +139,144 @@ public class ServicioStockTests
         Assert.True(resultado.Value!.StockBajo);
         Assert.Equal(5, presentacion.StockMinimo);
     }
+
+    [Fact]
+    public async Task EntradaManual_Idempotencia_PrimeraEjecucion_AplicaMovimientoUnaVez()
+    {
+        var (servicio, _, ledger, _, presentacion) = CrearServicio();
+        var clave = MovimientoStock.GenerarClaveIdempotencia(Guid.NewGuid(), "AGREGAR_STOCK", presentacion.Id, 10, null);
+
+        var resultado = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave));
+
+        Assert.True(resultado.IsSuccess);
+        Assert.Equal(10, resultado.Value!.StockActual);
+        Assert.Single(ledger.Movimientos);
+        Assert.Equal(clave, ledger.Movimientos[0].ClaveIdempotencia);
+    }
+
+    [Fact]
+    public async Task EntradaManual_Idempotencia_RepeticionSecuencial_MismoResultadoSinNuevoMovimiento()
+    {
+        var (servicio, _, ledger, _, presentacion) = CrearServicio();
+        var clave = MovimientoStock.GenerarClaveIdempotencia(Guid.NewGuid(), "AGREGAR_STOCK", presentacion.Id, 10, null);
+
+        var r1 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave));
+
+        var r2 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave));
+
+        Assert.True(r1.IsSuccess);
+        Assert.True(r2.IsSuccess);
+        Assert.Equal(r1.Value!.StockActual, r2.Value!.StockActual);
+        Assert.Single(ledger.Movimientos);
+        Assert.Equal(10, await ledger.CalcularStockAsync(presentacion.Id));
+    }
+
+    [Fact]
+    public async Task EntradaManual_Idempotencia_ConcurrenciaMismaClave_SoloUnaSeAplica()
+    {
+        var (servicio, _, ledger, _, presentacion) = CrearServicio();
+        var clave = MovimientoStock.GenerarClaveIdempotencia(Guid.NewGuid(), "AGREGAR_STOCK", presentacion.Id, 10, null);
+
+        var t1 = servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave));
+        var t2 = servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave));
+
+        var resultados = await Task.WhenAll(t1, t2);
+
+        // Ambas deben devolver éxito (idempotencia: reintento devuelve resultado original)
+        Assert.Equal(2, resultados.Count(r => r.IsSuccess));
+        Assert.Equal(10, resultados.First(r => r.IsSuccess).Value!.StockActual);
+        // Pero solo se crea UN movimiento en el ledger
+        Assert.Single(ledger.Movimientos);
+        Assert.Equal(10, await ledger.CalcularStockAsync(presentacion.Id));
+    }
+
+    [Fact]
+    public async Task EntradaManual_Idempotencia_ReintentoPostPersistencia_DevuelveResultadoOriginal()
+    {
+        var (servicio, _, ledger, uow, presentacion) = CrearServicio();
+        var clave = MovimientoStock.GenerarClaveIdempotencia(Guid.NewGuid(), "AGREGAR_STOCK", presentacion.Id, 10, null);
+
+        var r1 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave));
+
+        uow.LanzarError = true;
+
+        var r2 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave));
+
+        uow.LanzarError = false;
+
+        var r3 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave));
+
+        Assert.True(r1.IsSuccess);
+        Assert.True(r2.IsSuccess);
+        Assert.True(r3.IsSuccess);
+        Assert.Equal(r1.Value!.StockActual, r2.Value!.StockActual);
+        Assert.Equal(r1.Value!.StockActual, r3.Value!.StockActual);
+        Assert.Single(ledger.Movimientos);
+        Assert.Equal(10, await ledger.CalcularStockAsync(presentacion.Id));
+    }
+
+    [Fact]
+    public async Task EntradaManual_Idempotencia_MismaClaveDatosIncompatibles_FallaConflicto()
+    {
+        var (servicio, _, ledger, _, presentacion) = CrearServicio();
+        var clave = MovimientoStock.GenerarClaveIdempotencia(Guid.NewGuid(), "AGREGAR_STOCK", presentacion.Id, 10, null);
+
+        var r1 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave));
+
+        Assert.True(r1.IsSuccess);
+
+        var r2 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 20, null, "whatsapp", Canal.WHATSAPP, null, clave));
+
+        Assert.False(r2.IsSuccess);
+        Assert.Equal("IDEMPOTENCIA_CONFLICTO", r2.Error?.Code);
+        Assert.Single(ledger.Movimientos);
+        Assert.Equal(10, await ledger.CalcularStockAsync(presentacion.Id));
+    }
+
+    [Fact]
+    public async Task EntradaManual_Idempotencia_ClavesDiferentesIntencionesDiferentes_AmbasSeAplican()
+    {
+        var (servicio, _, ledger, _, presentacion) = CrearServicio();
+        var clave1 = MovimientoStock.GenerarClaveIdempotencia(Guid.NewGuid(), "AGREGAR_STOCK", presentacion.Id, 10, null);
+        var clave2 = MovimientoStock.GenerarClaveIdempotencia(Guid.NewGuid(), "AGREGAR_STOCK", presentacion.Id, 5, null);
+
+        var r1 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 10, null, "whatsapp", Canal.WHATSAPP, null, clave1));
+
+        var r2 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 5, null, "whatsapp", Canal.WHATSAPP, null, clave2));
+
+        Assert.True(r1.IsSuccess);
+        Assert.True(r2.IsSuccess);
+        Assert.Equal(15, r2.Value!.StockActual);
+        Assert.Equal(2, ledger.Movimientos.Count);
+        Assert.Equal(15, await ledger.CalcularStockAsync(presentacion.Id));
+    }
+
+    [Fact]
+    public async Task EntradaManual_Idempotencia_CompatibilidadMovimientosHistoricos_SinClaveFuncionaNormal()
+    {
+        var (servicio, _, ledger, _, presentacion) = CrearServicio(stockInicial: 5);
+
+        var r1 = await servicio.EntradaManualAsync(new EntradaManualCommand(
+            ComercioId, presentacion.Id, 3, null, "whatsapp", Canal.WHATSAPP));
+
+        Assert.True(r1.IsSuccess);
+        Assert.Equal(8, r1.Value!.StockActual);
+        Assert.Equal(8, await ledger.CalcularStockAsync(presentacion.Id));
+
+        Assert.Contains(ledger.Movimientos, m => m.Cantidad == 5);
+        Assert.Contains(ledger.Movimientos, m => m.Cantidad == 3 && m.ClaveIdempotencia is null);
+        Assert.Equal(2, ledger.Movimientos.Count);
+    }
 }

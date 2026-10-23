@@ -17,5 +17,6 @@ public interface IStockLedger
         DateTime desde,
         DateTime hastaExclusivo,
         CancellationToken cancellationToken = default);
+    Task<MovimientoStock?> ObtenerPorClaveIdempotenciaAsync(string claveIdempotencia, CancellationToken cancellationToken = default);
     void Add(MovimientoStock movimiento);
 }
